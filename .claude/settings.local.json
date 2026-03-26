@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python -m pytest tests/test_v02_risk.py -v)",
+      "Bash(python -m pytest tests/test_v04_lifecycle.py -v)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(python -m pytest tests/test_v06_portfolio.py -v)",
+      "Bash(python -m pytest tests/test_v07_orders.py -v)"
+    ]
+  }
+}

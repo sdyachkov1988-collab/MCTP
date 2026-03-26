@@ -1,0 +1,1 @@
+{"schema_version": "1.0.0", "symbol": {"base": "BTC", "quote": "USDT", "market": "SPOT"}, "held_qty": "1.00000000", "avg_cost_basis": "0", "free_quote": "10000.00000000", "quote_asset": "USDT", "is_in_position": true, "meaningful_position": true, "scale_in_count": 0, "timestamp": "2026-03-24T18:11:05.570658+00:00"}
