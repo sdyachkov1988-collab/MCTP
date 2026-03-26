@@ -25,6 +25,8 @@ from .models import StrategyInput
 
 
 class BtcUsdtMtfV20Strategy(StrategyBase):
+    requires_mtf_warmup: bool = True
+
     def __init__(self, indicator_engine: IndicatorEngine | None = None) -> None:
         self._indicator_engine = indicator_engine or IndicatorEngine()
 

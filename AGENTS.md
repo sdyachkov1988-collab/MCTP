@@ -1,14 +1,15 @@
 # MCTP — Modular Crypto Trading Platform
 
 ## Текущая подтверждённая стадия
-- подтверждённая стадия репозитория: `v1.7 + v2.0-step1`
-- `v2.0-step1` принят: `BtcUsdtMtfV20Strategy` + MTF агрегатор реализованы и протестированы
-- 458 тестов зелёные
-- следующий рабочий коридор: v2.0 testnet wiring — подключение реальной стратегии к testnet runtime
+- подтверждённая стадия репозитория: `v2.0-step2-fix` (pending acceptance)
+- 478 тестов зелёные
+- следующий рабочий коридор: v2.0 backtest wiring — OCO в `_run_v20_btcusdt_mtf`, `--strategy` флаг в `run_backtest_csv.py`
 
 ## Подтверждённые стадии
 - `v0.0`-`v1.7` полностью
 - `v2.0-step1`: стратегия + MTF агрегатор + backtest/paper wiring
+- `v2.0-patch1`: три CRITICAL фикса — run_testnet_platform использует BtcUsdtMtfV20Strategy, _persist_snapshot() защищён, boundary leakage устранён, ExchangeOrderStatus/ListOrderStatus enums добавлены
+- `v2.0-step2`: testnet wiring — LiveMtfAggregator, MtfKlineManager, 4 независимых kline канала M15/H1/H4/D1, REST priming, startup gate
 
 ## Архитектурные инварианты (нарушение недопустимо)
 - все финансовые значения — только `Decimal`
@@ -32,35 +33,28 @@
 - `v1.6` safety controls и последующий reliability hardening
 - `v1.7` scenario matrix, chaos/integration, operator artifacts, transition gate
 - `v2.0-step1` BtcUsdtMtfV20Strategy, MTF агрегатор, backtest/paper wiring
+- `v2.0-patch1` три CRITICAL фикса (boundary leakage, persist_snapshot, run_testnet_platform)
+- `v2.0-step2` testnet wiring (LiveMtfAggregator, MtfKlineManager, REST priming, startup gate)
 
 ## Известные проблемы которые нужно исправить (в порядке приоритета)
-
-### CRITICAL
-1. `run_testnet_platform.py` — использует EmaCrossSmokeStrategy вместо BtcUsdtMtfV20Strategy
-2. `mctp/portfolio/tracker.py` — `_persist_snapshot()` без try/catch и алерта
-3. `mctp/runtime/events.py` — raw exchange статусы протекают за пределы adapter boundary
 
 ### MAJOR
 4. `mctp/strategy/mtf.py` — нет warning при молчаливом отбрасывании bucket при gap в данных
 5. `mctp/backtest/config.py:22` — `fee_rate` не из `constants.py`
 6. `mctp/storage/order_store.py` и `balance_cache.py` — нет проверки schema_version
-7. `docs/v1_7_to_v2_0_readiness_gate.md` — устарел, нужно обновить
+7. `mctp/core/enums.py` — нет `Timeframe.MONTHLY`
+8. `mctp/indicators/engine.py` — cold-start EMA без seed
 
 ### MEDIUM
-8. `mctp/execution/paper.py:123` — `float(T_CANCEL)` отклонение от Decimal дисциплины
-9. `mctp/indicators/engine.py` — magic number для CCI не из constants.py
-10. Warmup 19200 свечей (200 дней M15) нигде не задокументирован
+10. `mctp/execution/paper.py:123` — `float(T_CANCEL)` отклонение от Decimal дисциплины
+11. `mctp/indicators/engine.py` — magic number для CCI не из constants.py
 
 ## Следующая задача для агента
-Исправить три CRITICAL проблемы выше.
-Затем: подключить `BtcUsdtMtfV20Strategy` к testnet runtime.
-
-Порядок работы:
-1. Fix `_persist_snapshot()` — try/catch + alert dispatch
-2. Fix `events.py` — убрать raw exchange поля за boundary
-3. Update `run_testnet_platform.py` — заменить smoke на v2.0 стратегию
-4. Прогнать полный тест-сьют — должно быть 458+ зелёных
-5. Провести аудит изменений
+v2.0 backtest wiring:
+1. OCO wiring в `_run_v20_btcusdt_mtf` flow
+2. `--strategy` флаг в `run_backtest_csv.py`
+3. Прогнать полный тест-сьют
+4. Провести аудит изменений
 
 ## Anti-scope правила
 - не добавлять multi-pair scope

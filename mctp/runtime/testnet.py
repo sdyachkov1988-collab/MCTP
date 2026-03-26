@@ -467,9 +467,10 @@ class TestnetRuntime:
                     "Candle counts: %s",
                     self.mtf_aggregator.candle_counts(),
                 )
+                self._emit_runtime_event("runtime_starting_warmup_pending", audit=True)
             else:
                 self.status = TestnetRuntimeStatus.READY
-        self._emit_runtime_event("runtime_ready", audit=True)
+                self._emit_runtime_event("runtime_ready", audit=True)
 
     async def shutdown(self) -> None:
         self._shutting_down = True
@@ -588,6 +589,7 @@ class TestnetRuntime:
     async def emit_heartbeat_observability(self) -> None:
         now = datetime.now(timezone.utc)
         await self.evaluate_staleness(now)
+        self.mtf_kline_manager.evaluate_staleness(now)
         self.last_heartbeat_at = now
         self._heartbeat_timeout_active = False
         self._evaluate_safety_controls(now)
@@ -678,8 +680,7 @@ class TestnetRuntime:
             return
         history = self.candles.setdefault(event.timeframe, [])
         history.append(event.candle)
-        # Also feed into MTF aggregator for live incremental updates
-        self.mtf_aggregator.on_candle(event.timeframe, event.candle)
+        # MTF aggregator is fed exclusively by MtfKlineManager — do NOT feed here
         if len(history) < self.config.warmup_bars:
             return
         # If any TF is stale, strategy must return HOLD (do not crash)
@@ -788,9 +789,7 @@ class TestnetRuntime:
 
     def _requires_mtf_warmup(self) -> bool:
         """Check if the current strategy requires MTF warmup data."""
-        # Strategy signals MTF requirement by its class name or a marker attribute
-        from mctp.strategy.v2_0_btcusdt_mtf import BtcUsdtMtfV20Strategy
-        return isinstance(self.strategy, BtcUsdtMtfV20Strategy)
+        return getattr(self.strategy, "requires_mtf_warmup", False)
 
     def _lot_size(self) -> Optional[Decimal]:
         lot_size = self.config.instrument_info.get("lot_size")
