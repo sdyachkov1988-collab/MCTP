@@ -131,6 +131,16 @@ TTL-based balance refresh does not heal a stale `USER_DATA` stream and must not 
 - delisting announcement before the force-exit window, if no force-exit condition is active yet
 - post-only rejection info event, if runtime state remains coherent
 
+## MTF Strategy Warmup Behavior
+
+The `BtcUsdtMtfV20Strategy` requires 19,200 M15 candles (~200 days of data) to compute the D1 EMA-200 indicator. During the warmup period, the strategy returns HOLD for every candle — no trades are opened or closed.
+
+At testnet startup, the runtime performs REST priming: it fetches historical klines via `GET /api/v3/klines` for all four timeframes (M15, H1, H4, D1) and feeds them into the MTF aggregator. The startup gate blocks the runtime from transitioning to READY until warmup is complete.
+
+If REST priming succeeds and sufficient historical data is available on the exchange, warmup resolves automatically at startup. If the exchange does not have enough historical data, the runtime remains in STARTING status until enough live candles accumulate (which may take up to 200 days for full D1 EMA-200 convergence).
+
+HOLD during warmup is safe: no positions are opened, no orders are placed, and the runtime remains in an observing-only mode.
+
 ## Accepted Safeguards Referenced By This Runbook
 
 - startup synchronization gate

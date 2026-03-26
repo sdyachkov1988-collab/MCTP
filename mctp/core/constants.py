@@ -193,6 +193,9 @@ V20_MTF_H1_RSI_PERIOD: int = 14
 V20_MTF_H1_RSI_ENTRY_MIN: Decimal = Decimal("50")
 V20_MTF_H1_RSI_ENTRY_MAX: Decimal = Decimal("70")
 V20_MTF_H1_RSI_EXIT_MIN: Decimal = Decimal("70")
+# 200 days of M15 data required for EMA200 on D1.
+# Strategy returns HOLD until warmup is complete.
+# With REST priming at startup this is resolved automatically.
 V20_MTF_REQUIRED_M15_CANDLES: int = V20_MTF_D1_EMA_PERIOD * V20_MTF_M15_PER_D1
 V20_MTF_BUY_REASON: str = "v20_mtf_bullish_alignment"
 V20_MTF_SELL_REASON: str = "v20_mtf_exit_signal"

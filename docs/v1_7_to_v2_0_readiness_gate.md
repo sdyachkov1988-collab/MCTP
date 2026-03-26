@@ -27,7 +27,7 @@ The repository has completed the following accepted pre-live verification work:
 
 The following are still outside the accepted repository scope at this boundary:
 
-- no real `v2.0` MTF strategy implementation yet
+- `BtcUsdtMtfV20Strategy` is implemented and testnet wiring is in progress
 - no live production rollout yet
 - no multi-pair support
 - no regime engine

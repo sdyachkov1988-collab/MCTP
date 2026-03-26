@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -109,7 +110,11 @@ from mctp.sizing.models import RiskMultipliers
 from mctp.sizing.sizer import PositionSizer
 from mctp.strategy import StrategyBase, StrategyInput
 from mctp.streams.base import StreamType
+from mctp.runtime.mtf_kline_manager import MtfKlineManager, MTF_TIMEFRAMES
 from mctp.runtime.testnet_trade_flow import TestnetTradeFlowHelper
+from mctp.strategy.mtf_live import LiveMtfAggregator
+
+_logger = logging.getLogger(__name__)
 
 
 class TestnetRuntimeStatus(Enum):
@@ -169,6 +174,7 @@ class TestnetRuntime:
         user_transport: Optional[Any] = None,
         observability: Optional[ObservabilityHub] = None,
         alert_dispatcher: Optional[AlertDispatcher] = None,
+        mtf_kline_transports: Optional[dict[Timeframe, Any]] = None,
     ) -> None:
         self.config = config
         self.strategy = strategy
@@ -230,6 +236,14 @@ class TestnetRuntime:
         self._book_transport = book_transport or WebSocketJsonTransport()
         self._bnb_transport = bnb_transport or WebSocketJsonTransport()
         self._user_transport = user_transport or WebSocketJsonTransport()
+        self.mtf_aggregator = LiveMtfAggregator()
+        self.mtf_kline_manager = MtfKlineManager(
+            symbol=config.symbol,
+            aggregator=self.mtf_aggregator,
+            kline_transports=mtf_kline_transports or {},
+            rest_client=getattr(executor, "_rest_client", None),
+            primary_kline_transport=self._kline_transport,
+        )
         self.channels: dict[StreamType, ReconnectableStreamChannel] = {}
         self.last_delisting_signal = None
         self.protection_mode = ProtectionMode.NONE
@@ -432,6 +446,11 @@ class TestnetRuntime:
         }
         for channel in self.channels.values():
             await channel.connect()
+        # MTF kline channels: independent lifecycle per timeframe
+        self.mtf_kline_manager.build_channels()
+        await self.mtf_kline_manager.connect_all()
+        # REST priming: fetch historical klines for all 4 TF
+        await self.mtf_kline_manager.prime_from_rest()
         self.last_heartbeat_at = datetime.now(timezone.utc)
         self._heartbeat_task = self._spawn_critical_background_task("heartbeat_loop", self._heartbeat_loop())
         self._heartbeat_watchdog_task = self._spawn_critical_background_task(
@@ -442,7 +461,14 @@ class TestnetRuntime:
         self._evaluate_safety_controls(self.current_runtime_time)
         self.startup_checks_completed = True
         if self.status == TestnetRuntimeStatus.STARTING:
-            self.status = TestnetRuntimeStatus.READY
+            if self._requires_mtf_warmup() and not self.mtf_aggregator.warmup_complete:
+                _logger.warning(
+                    "MTF warmup incomplete at startup; remaining in STARTING. "
+                    "Candle counts: %s",
+                    self.mtf_aggregator.candle_counts(),
+                )
+            else:
+                self.status = TestnetRuntimeStatus.READY
         self._emit_runtime_event("runtime_ready", audit=True)
 
     async def shutdown(self) -> None:
@@ -461,6 +487,7 @@ class TestnetRuntime:
                 pass
         for channel in self.channels.values():
             await channel.disconnect()
+        await self.mtf_kline_manager.disconnect_all()
         self.status = TestnetRuntimeStatus.STOPPED
         self._emit_runtime_event("runtime_stopped", audit=True)
 
@@ -468,8 +495,28 @@ class TestnetRuntime:
         for channel in self.channels.values():
             await channel.ping(now)
             await channel.pong(now)
+        await self.mtf_kline_manager.ping_all(now)
 
     async def process_all_available(self) -> None:
+        # Process MTF kline channels (independent per-TF lifecycle)
+        try:
+            mtf_events = await self.mtf_kline_manager.receive_and_process()
+            for mtf_event in mtf_events:
+                # Route M15 events to legacy kline handler for backward compat
+                if mtf_event.timeframe == Timeframe.M15:
+                    self.channels[StreamType.KLINE].touch(mtf_event.candle.timestamp)
+                # Check warmup transition: if aggregator just became warm, transition to READY
+                if (
+                    (self.mtf_aggregator.warmup_complete or not self._requires_mtf_warmup())
+                    and self.startup_checks_completed
+                    and self.status == TestnetRuntimeStatus.STARTING
+                ):
+                    self.status = TestnetRuntimeStatus.READY
+                    self._emit_runtime_event("mtf_warmup_complete", audit=True)
+        except Exception as exc:
+            self._handle_runtime_exception(exc)
+            return
+
         processed = True
         processed_any = False
         while processed:
@@ -631,11 +678,21 @@ class TestnetRuntime:
             return
         history = self.candles.setdefault(event.timeframe, [])
         history.append(event.candle)
+        # Also feed into MTF aggregator for live incremental updates
+        self.mtf_aggregator.on_candle(event.timeframe, event.candle)
         if len(history) < self.config.warmup_bars:
+            return
+        # If any TF is stale, strategy must return HOLD (do not crash)
+        if self.mtf_aggregator.any_stale:
             return
         if self._stream_health_helper.user_data_stream_is_stale_at(event.candle.timestamp):
             self._stream_health_helper.trigger_user_data_stale_fail_safe(event.candle.timestamp)
             return
+        # Build full MTF candle map from aggregator
+        mtf_candles = self.mtf_aggregator.build_strategy_candles()
+        # Fallback: if MTF aggregator has no data, use legacy single-TF path
+        if not mtf_candles.get(Timeframe.M15):
+            mtf_candles = {event.timeframe: list(history)}
         indicators = {
             "ema_9": self.indicator_engine.ema(history, 9),
             "ema_21": self.indicator_engine.ema(history, 21),
@@ -644,7 +701,7 @@ class TestnetRuntime:
         self.last_strategy_input = StrategyInput(
             snapshot=self.portfolio.snapshot,
             indicators=indicators,
-            candles={event.timeframe: list(history)},
+            candles=mtf_candles,
             onchain=None,
         )
         self.strategy_call_count += 1
@@ -728,6 +785,12 @@ class TestnetRuntime:
 
     def _order_quantity(self, intent) -> tuple[Optional[Decimal], Optional[Any]]:
         return self._trade_flow_helper.order_quantity(intent)
+
+    def _requires_mtf_warmup(self) -> bool:
+        """Check if the current strategy requires MTF warmup data."""
+        # Strategy signals MTF requirement by its class name or a marker attribute
+        from mctp.strategy.v2_0_btcusdt_mtf import BtcUsdtMtfV20Strategy
+        return isinstance(self.strategy, BtcUsdtMtfV20Strategy)
 
     def _lot_size(self) -> Optional[Decimal]:
         lot_size = self.config.instrument_info.get("lot_size")
