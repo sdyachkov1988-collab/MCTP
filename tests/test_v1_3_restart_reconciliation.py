@@ -6,7 +6,7 @@ import pytest
 
 from mctp.adapters import BinanceCredentials, BinanceSpotTestnetAdapterV1, BinanceSpotTestnetConfigV1
 from mctp.core.constants import CRITICAL_EXTERNAL_OCO_CANCEL_CODE, T_CANCEL, WARNING_MANUAL_TRADE_DETECTED_CODE
-from mctp.core.enums import AlertSeverity, CommissionAsset, ExecutionResult, Market, OrderType, ProtectionMode, Side, Timeframe
+from mctp.core.enums import AlertSeverity, CommissionAsset, ContingencyType, ExchangeOrderStatus, ExecutionResult, ListOrderStatus, ListStatusType, Market, OrderType, ProtectionMode, Side, Timeframe
 from mctp.core.order import Fill, Order
 from mctp.core.types import PortfolioSnapshot, Symbol
 from mctp.execution.oco import OCOOrder
@@ -343,9 +343,9 @@ async def test_external_oco_cancellation_still_reactivates_software_stop_and_rai
                 timestamp=START,
                 symbol=BTCUSDT,
                 list_order_id="oco-1",
-                list_status_type="ALL_DONE",
-                list_order_status="ALL_DONE",
-                contingency_type="OCO",
+                list_status_type=ListStatusType.ALL_DONE,
+                list_order_status=ListOrderStatus.ALL_DONE,
+                contingency_type=ContingencyType.OCO,
             )
         )
         assert runtime.protection_mode == ProtectionMode.SOFTWARE_STOP
@@ -467,7 +467,7 @@ async def test_restart_reconciliation_reconstructs_full_fill_set_for_filled_orde
             symbol=BTCUSDT,
             client_order_id="buy-1",
             execution_result=ExecutionResult.FILLED,
-            order_status="FILLED",
+            order_status=ExchangeOrderStatus.FILLED,
             fill=duplicate_fill,
         )
     )

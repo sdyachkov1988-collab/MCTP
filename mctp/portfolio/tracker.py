@@ -2,12 +2,15 @@
 PortfolioTracker is the single source of truth for portfolio state (v0.6).
 State changes only through on_fill().
 """
+import json
+import logging
 from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Callable, Optional
 
-from mctp.core.enums import CommissionAsset
+from mctp.core.constants import CRITICAL_STORAGE_UNAVAILABLE_CODE
+from mctp.core.enums import CommissionAsset, OperationalMode
 from mctp.core.order import Fill
 from mctp.core.types import PortfolioSnapshot
 from mctp.portfolio.accounting import AccountingLedger
@@ -15,6 +18,8 @@ from mctp.portfolio.equity import EquitySnapshot, EquityTracker
 from mctp.portfolio.pnl import PnLCalculator, PnLResult
 from mctp.portfolio.updater import CostBasisUpdater
 from mctp.storage.snapshot_store import SnapshotStore
+
+_logger = logging.getLogger(__name__)
 
 
 class PortfolioTracker:
@@ -33,6 +38,7 @@ class PortfolioTracker:
         self._bnb_price_provider: Optional[Callable[[], Optional[Decimal]]] = bnb_price_provider
         self._lot_size_provider: Optional[Callable[[], Optional[Decimal]]] = lot_size_provider
         self._accounting_ledger: AccountingLedger = accounting_ledger or AccountingLedger()
+        self._operational_mode: OperationalMode = OperationalMode.RUN
 
     @property
     def snapshot(self) -> PortfolioSnapshot:
@@ -42,22 +48,28 @@ class PortfolioTracker:
     def accounting(self) -> AccountingLedger:
         return self._accounting_ledger
 
+    @property
+    def operational_mode(self) -> OperationalMode:
+        return self._operational_mode
+
     def on_fill(self, fill: Fill) -> PortfolioSnapshot:
         bnb_rate_at_fill = self._resolve_bnb_rate_at_fill(fill)
         lot_size = self._resolve_lot_size()
         self._accounting_ledger.record_fill(fill, bnb_rate_at_fill)
-        self._snapshot = CostBasisUpdater.apply_fill(self._snapshot, fill, bnb_rate_at_fill, lot_size)
-        self._persist_snapshot()
+        new_snapshot = CostBasisUpdater.apply_fill(self._snapshot, fill, bnb_rate_at_fill, lot_size)
+        if self._try_persist(new_snapshot):
+            self._snapshot = new_snapshot
         return self._snapshot
 
     def replace_snapshot(self, **changes: object) -> PortfolioSnapshot:
-        self._snapshot = replace(self._snapshot, **changes)
-        self._persist_snapshot()
+        new_snapshot = replace(self._snapshot, **changes)
+        if self._try_persist(new_snapshot):
+            self._snapshot = new_snapshot
         return self._snapshot
 
     def restore_snapshot(self, snapshot: PortfolioSnapshot) -> PortfolioSnapshot:
-        self._snapshot = snapshot
-        self._persist_snapshot()
+        if self._try_persist(snapshot):
+            self._snapshot = snapshot
         return self._snapshot
 
     def record_equity(
@@ -116,6 +128,24 @@ class PortfolioTracker:
             raise AssertionError("lot_size_provider must return Decimal or None")
         return lot_size
 
-    def _persist_snapshot(self) -> None:
-        if self._snapshot_store is not None:
-            self._snapshot_store.save(self._snapshot)
+    def _try_persist(self, snapshot: PortfolioSnapshot) -> bool:
+        """Persist snapshot to disk. Returns True on success, False on failure.
+
+        On failure: logs CRITICAL, transitions to PAUSE_NEW_ENTRIES,
+        and returns False so the caller does NOT advance in-memory state.
+        """
+        if self._snapshot_store is None:
+            return True
+        try:
+            self._snapshot_store.save(snapshot)
+            return True
+        except Exception as exc:
+            _logger.critical(
+                json.dumps({
+                    "event_type": "SNAPSHOT_PERSIST_FAILED",
+                    "code": CRITICAL_STORAGE_UNAVAILABLE_CODE,
+                    "reason": str(exc),
+                })
+            )
+            self._operational_mode = OperationalMode.PAUSE_NEW_ENTRIES
+            return False

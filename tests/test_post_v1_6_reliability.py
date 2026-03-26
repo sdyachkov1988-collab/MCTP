@@ -15,7 +15,7 @@ from mctp.core.constants import (
     EXECUTION_STATE_RETENTION_SECONDS,
     USER_DATA_STALE_SECONDS,
 )
-from mctp.core.enums import AlertSeverity, CommissionAsset, ExecutionResult, IntentType, Market, OrderType, ProtectionMode, QuantityMode, Side, Timeframe
+from mctp.core.enums import AlertSeverity, CommissionAsset, ExchangeOrderStatus, ExecutionResult, IntentType, Market, OrderType, ProtectionMode, QuantityMode, Side, Timeframe
 from mctp.core.order import Fill, Order
 from mctp.core.types import Intent, Symbol
 from mctp.execution.oco import OCOOrder
@@ -183,7 +183,7 @@ async def test_websocket_filled_status_is_not_regressed_by_weaker_rest_submit_st
             symbol=BTCUSDT,
             client_order_id="cid-1",
             execution_result=ExecutionResult.FILLED,
-            order_status="FILLED",
+            order_status=ExchangeOrderStatus.FILLED,
             fill=None,
         )
     )
@@ -203,7 +203,7 @@ def test_terminal_execution_state_entries_are_pruned_after_retention_window(tmp_
             symbol=BTCUSDT,
             client_order_id="filled-1",
             execution_result=ExecutionResult.FILLED,
-            order_status="FILLED",
+            order_status=ExchangeOrderStatus.FILLED,
             fill=None,
         )
     )
@@ -347,7 +347,7 @@ async def test_account_position_and_fill_do_not_double_apply_same_economic_event
             symbol=BTCUSDT,
             client_order_id="buy-1",
             execution_result=ExecutionResult.FILLED,
-            order_status="FILLED",
+            order_status=ExchangeOrderStatus.FILLED,
             fill=fill,
         )
     )
@@ -402,7 +402,7 @@ async def test_duplicate_execution_report_does_not_double_apply_fill_or_history(
         symbol=BTCUSDT,
         client_order_id="buy-dup",
         execution_result=ExecutionResult.PARTIAL_FILL,
-        order_status="PARTIALLY_FILLED",
+        order_status=ExchangeOrderStatus.PARTIALLY_FILLED,
         fill=fill,
     )
     await runtime._handle_user(event)
@@ -448,7 +448,7 @@ async def test_distinct_partial_fills_of_same_order_are_all_applied_once_each(tm
             symbol=BTCUSDT,
             client_order_id="buy-split",
             execution_result=ExecutionResult.PARTIAL_FILL,
-            order_status="PARTIALLY_FILLED",
+            order_status=ExchangeOrderStatus.PARTIALLY_FILLED,
             fill=first_fill,
         )
     )
@@ -458,7 +458,7 @@ async def test_distinct_partial_fills_of_same_order_are_all_applied_once_each(tm
             symbol=BTCUSDT,
             client_order_id="buy-split",
             execution_result=ExecutionResult.FILLED,
-            order_status="FILLED",
+            order_status=ExchangeOrderStatus.FILLED,
             fill=second_fill,
         )
     )
@@ -492,7 +492,7 @@ async def test_duplicate_weaker_execution_state_does_not_reopen_pending_after_te
             symbol=BTCUSDT,
             client_order_id="buy-term",
             execution_result=ExecutionResult.FILLED,
-            order_status="FILLED",
+            order_status=ExchangeOrderStatus.FILLED,
             fill=None,
         )
     )
@@ -502,7 +502,7 @@ async def test_duplicate_weaker_execution_state_does_not_reopen_pending_after_te
             symbol=BTCUSDT,
             client_order_id="buy-term",
             execution_result=ExecutionResult.PARTIAL_FILL,
-            order_status="PARTIALLY_FILLED",
+            order_status=ExchangeOrderStatus.PARTIALLY_FILLED,
             fill=None,
         )
     )
@@ -543,7 +543,7 @@ async def test_pending_order_blocks_duplicate_submit_until_resolution(tmp_path):
             symbol=BTCUSDT,
             client_order_id=runtime.pending_order_client_id or "pending-1",
             execution_result=ExecutionResult.CANCELLED,
-            order_status="CANCELED",
+            order_status=ExchangeOrderStatus.CANCELED,
             fill=None,
         )
     )

@@ -6,8 +6,8 @@ from mctp.adapters import BinanceCredentials, BinanceSpotTestnetAdapterV1, Binan
 from mctp.core.constants import TESTNET_SMOKE_GUARD_ENV
 from mctp.core.enums import Market, Timeframe
 from mctp.core.types import Symbol
-from mctp.runtime.strategy_smoke import EmaCrossSmokeStrategy
 from mctp.runtime.testnet import TestnetRuntime, TestnetRuntimeConfig
+from mctp.strategy import BtcUsdtMtfV20Strategy
 from mctp.storage.accounting_store import AccountingStore
 from mctp.storage.balance_cache import BalanceCacheStore
 from mctp.storage.snapshot_store import SnapshotStore
@@ -45,7 +45,7 @@ async def main() -> None:
             },
             initial_balances={"BTC": Decimal("0"), "USDT": Decimal("0")},
         ),
-        strategy=EmaCrossSmokeStrategy(),
+        strategy=BtcUsdtMtfV20Strategy(),
         executor=adapter,
         snapshot_store=SnapshotStore("testnet_snapshot.json"),
         balance_cache_store=BalanceCacheStore("testnet_balances.json"),

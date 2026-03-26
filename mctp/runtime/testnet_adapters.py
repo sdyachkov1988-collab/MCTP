@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
@@ -10,13 +11,15 @@ from mctp.core.constants import (
     RAW_COMMISSION_ASSET_BASE,
     RAW_COMMISSION_ASSET_QUOTE,
 )
-from mctp.core.enums import CommissionAsset, Side, Timeframe
+from mctp.core.enums import CommissionAsset, ContingencyType, ExchangeOrderStatus, ListOrderStatus, ListStatusType, Side, Timeframe
 from mctp.core.order import Fill
 from mctp.core.types import Symbol
 from mctp.runtime.adapters import adapt_binance_payload
 from mctp.runtime.testnet_exchange_boundary import execution_result_from_exchange_status, parse_exchange_spot_symbol
 from mctp.runtime.events import BnbTickerEvent, BookTickerEvent, ExecutionReportEvent, KlineEvent, OCOListStatusEvent, OutboundAccountPositionEvent
 from mctp.streams.base import StreamType
+
+_logger = logging.getLogger(__name__)
 
 
 def adapt_binance_testnet_payload(
@@ -62,7 +65,7 @@ def adapt_binance_testnet_payload(
             symbol=resolved_symbol,
             client_order_id=str(payload.get("c", "")),
             execution_result=execution_result_from_exchange_status(str(payload.get("X", ""))),
-            order_status=str(payload.get("X", "")),
+            order_status=_map_exchange_order_status(str(payload.get("X", ""))),
             fill=fill,
         )
     if event_type == EXCHANGE_USER_DATA_EVENT_LIST_STATUS:
@@ -71,9 +74,9 @@ def adapt_binance_testnet_payload(
             timestamp=_from_millis(payload.get("E")),
             symbol=resolved_symbol,
             list_order_id=str(payload.get("g", payload.get("orderListId", ""))),
-            list_status_type=str(payload.get("l", payload.get("listStatusType", ""))),
-            list_order_status=str(payload.get("L", payload.get("listOrderStatus", ""))),
-            contingency_type=str(payload.get("c", payload.get("contingencyType", ""))),
+            list_status_type=_map_list_status_type(str(payload.get("l", payload.get("listStatusType", "")))),
+            list_order_status=_map_list_order_status(str(payload.get("L", payload.get("listOrderStatus", "")))),
+            contingency_type=_map_contingency_type(str(payload.get("c", payload.get("contingencyType", "")))),
         )
     return None
 
@@ -89,3 +92,51 @@ def _commission_asset(raw_asset: Any) -> CommissionAsset:
     if normalized == RAW_COMMISSION_ASSET_BASE:
         return CommissionAsset.BASE
     return CommissionAsset.QUOTE
+
+
+def _map_exchange_order_status(raw: str) -> ExchangeOrderStatus:
+    """Map raw exchange order status string to internal enum.
+
+    Raises ValueError with WARNING log on unknown status.
+    """
+    try:
+        return ExchangeOrderStatus(raw)
+    except ValueError:
+        _logger.warning("Unknown exchange order status received: %s", raw)
+        raise
+
+
+def _map_list_status_type(raw: str) -> ListStatusType:
+    """Map raw list status type string to internal enum.
+
+    Raises ValueError with WARNING log on unknown status.
+    """
+    try:
+        return ListStatusType(raw)
+    except ValueError:
+        _logger.warning("Unknown list status type received: %s", raw)
+        raise
+
+
+def _map_list_order_status(raw: str) -> ListOrderStatus:
+    """Map raw list order status string to internal enum.
+
+    Raises ValueError with WARNING log on unknown status.
+    """
+    try:
+        return ListOrderStatus(raw)
+    except ValueError:
+        _logger.warning("Unknown list order status received: %s", raw)
+        raise
+
+
+def _map_contingency_type(raw: str) -> ContingencyType:
+    """Map raw contingency type string to internal enum.
+
+    Raises ValueError with WARNING log on unknown type.
+    """
+    try:
+        return ContingencyType(raw)
+    except ValueError:
+        _logger.warning("Unknown contingency type received: %s", raw)
+        raise

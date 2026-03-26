@@ -26,7 +26,7 @@ from mctp.core.constants import (
     WARNING_STALE_KLINE_CODE,
     WARNING_STRATEGY_DEGRADATION_CODE,
 )
-from mctp.core.enums import AlertSeverity, Market, ProtectionMode, Timeframe
+from mctp.core.enums import AlertSeverity, ContingencyType, ListOrderStatus, ListStatusType, Market, ProtectionMode, Timeframe
 from mctp.core.types import PortfolioSnapshot, Symbol
 from mctp.execution.oco import OCOOrder
 from mctp.runtime import AlertDispatcher, MemoryAlertChannel
@@ -211,9 +211,9 @@ async def test_critical_alert_conditions_are_generated(tmp_path):
                 timestamp=START,
                 symbol=BTCUSDT,
                 list_order_id="oco-1",
-                list_status_type="ALL_DONE",
-                list_order_status="ALL_DONE",
-                contingency_type="OCO",
+                list_status_type=ListStatusType.ALL_DONE,
+                list_order_status=ListOrderStatus.ALL_DONE,
+                contingency_type=ContingencyType.OCO,
             )
         )
         assert _latest_alert_code(runtime) == CRITICAL_EXTERNAL_OCO_CANCEL_CODE

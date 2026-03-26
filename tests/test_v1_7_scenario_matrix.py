@@ -6,7 +6,7 @@ import pytest
 
 from mctp.adapters import BinanceCredentials, BinanceSpotTestnetAdapterV1, BinanceSpotTestnetConfigV1
 from mctp.core.constants import T_CANCEL
-from mctp.core.enums import BasisRecoveryState, CommissionAsset, ExecutionResult, IntentType, Market, OrderType, ProtectionMode, QuantityMode, Side, SymbolChangeStage, Timeframe
+from mctp.core.enums import BasisRecoveryState, CommissionAsset, ExchangeOrderStatus, ExecutionResult, IntentType, Market, OrderType, ProtectionMode, QuantityMode, Side, SymbolChangeStage, Timeframe
 from mctp.core.order import Fill, Order
 from mctp.core.types import Intent, Symbol
 from mctp.execution.oco import OCOOrder, OCOStatus
@@ -231,7 +231,7 @@ async def test_v17_scenario_entry_fill_then_oco_protection_creation_leaves_runti
                 symbol=BTCUSDT,
                 client_order_id=entry_order_id,
                 execution_result=ExecutionResult.FILLED,
-                order_status="FILLED",
+                order_status=ExchangeOrderStatus.FILLED,
                 fill=_buy_fill(entry_order_id, Decimal("0.1"), Decimal("100"), timestamp=START),
             )
         )
@@ -449,7 +449,7 @@ async def test_v17_scenario_runtime_t_cancel_clears_pending_state_without_ghost_
                 symbol=BTCUSDT,
                 client_order_id=pending_order_id,
                 execution_result=ExecutionResult.CANCELLED,
-                order_status="CANCELED",
+                order_status=ExchangeOrderStatus.CANCELED,
                 fill=None,
             )
         )
@@ -667,7 +667,7 @@ async def test_v17_scenario_symbol_change_progression_reaches_config_update_afte
                 symbol=BTCUSDT,
                 client_order_id=runtime.pending_order_client_id or "symbol-change-sell",
                 execution_result=ExecutionResult.FILLED,
-                order_status="FILLED",
+                order_status=ExchangeOrderStatus.FILLED,
                 fill=sell_fill,
             )
         )

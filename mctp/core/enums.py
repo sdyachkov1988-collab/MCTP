@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, StrEnum
 
 
 class Market(Enum):
@@ -125,3 +125,38 @@ class BasisRecoveryState(Enum):
     MANUAL = "MANUAL"
     ZERO_DECLARED = "ZERO_DECLARED"
     CLOSE_PENDING = "CLOSE_PENDING"
+
+
+class ExchangeOrderStatus(StrEnum):
+    """Internal typed representation of exchange order status.
+
+    Uses StrEnum so that comparisons with raw string constants
+    in existing code remain backward-compatible.
+    """
+    NEW = "NEW"
+    PENDING_NEW = "PENDING_NEW"
+    PARTIALLY_FILLED = "PARTIALLY_FILLED"
+    FILLED = "FILLED"
+    CANCELED = "CANCELED"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
+    REJECTED = "REJECTED"
+
+
+class ListStatusType(StrEnum):
+    """Internal typed representation of OCO list status type."""
+    RESPONSE = "RESPONSE"
+    EXEC_STARTED = "EXEC_STARTED"
+    ALL_DONE = "ALL_DONE"
+
+
+class ListOrderStatus(StrEnum):
+    """Internal typed representation of OCO list order status."""
+    EXECUTING = "EXECUTING"
+    ALL_DONE = "ALL_DONE"
+    REJECT = "REJECT"
+
+
+class ContingencyType(StrEnum):
+    """Internal typed representation of OCO contingency type."""
+    OCO = "OCO"

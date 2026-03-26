@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from mctp.core.enums import AlertSeverity, ExecutionResult, Timeframe
+from mctp.core.enums import AlertSeverity, ContingencyType, ExchangeOrderStatus, ExecutionResult, ListOrderStatus, ListStatusType, Timeframe
 from mctp.core.order import Fill
 from mctp.core.types import Symbol
 from mctp.indicators.models import Candle
@@ -46,7 +46,7 @@ class ExecutionReportEvent:
     symbol: Symbol
     client_order_id: str
     execution_result: ExecutionResult
-    order_status: str
+    order_status: ExchangeOrderStatus
     fill: Optional[Fill] = None
 
 
@@ -55,9 +55,9 @@ class OCOListStatusEvent:
     timestamp: datetime
     symbol: Symbol
     list_order_id: str
-    list_status_type: str
-    list_order_status: str
-    contingency_type: str
+    list_status_type: ListStatusType
+    list_order_status: ListOrderStatus
+    contingency_type: ContingencyType
 
 
 @dataclass(frozen=True)
