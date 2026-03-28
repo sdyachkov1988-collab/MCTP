@@ -7,6 +7,11 @@ from mctp.backtest import BacktestCandle, BacktestConfig, BacktestEngine
 from mctp.core.constants import (
     STRATEGY_ID_V20_BTCUSDT_MTF,
     V20_MTF_M15_ATR_PERIOD,
+    V20_MTF_LATE_OVERSTRETCH_H4_EXHAUST_BLOCK_REASON,
+    V20_MTF_LATE_OVERSTRETCH_H4_FLAT_BLOCK_REASON,
+    V20_MTF_LATE_OVERSTRETCH_H4_WEAK_BLOCK_REASON,
+    V20_MTF_MID_OVERSTRETCH_H4_CONTINUATION_BLOCK_REASON,
+    V20_MTF_MID_OVERSTRETCH_H4_WEAK_BLOCK_REASON,
     V20_MTF_REQUIRED_M15_CANDLES,
 )
 from mctp.core.enums import IntentType, Market, QuantityMode, Timeframe
@@ -164,7 +169,17 @@ def _strategy_indicators(m15: list[Candle]) -> dict[str, object]:
 
 
 def _strong_bullish_d1() -> list[Candle]:
-    closes = [Decimal("100") + Decimal(index) for index in range(200)]
+    closes = [Decimal("100") for _ in range(180)] + [Decimal("120") for _ in range(20)]
+    return _candle_sequence(Timeframe.D1, closes, start=START)
+
+
+def _mid_overstretch_d1() -> list[Candle]:
+    closes = [Decimal("100") for _ in range(180)] + [Decimal("114") for _ in range(20)]
+    return _candle_sequence(Timeframe.D1, closes, start=START)
+
+
+def _moderate_overstretch_d1() -> list[Candle]:
+    closes = [Decimal("100") for _ in range(180)] + [Decimal("126") for _ in range(20)]
     return _candle_sequence(Timeframe.D1, closes, start=START)
 
 
@@ -180,6 +195,62 @@ def _weak_trend_d1() -> list[Candle]:
 
 def _bullish_h4() -> list[Candle]:
     closes = [Decimal("200") + (Decimal(index) * Decimal("2")) for index in range(21)]
+    return _candle_sequence(Timeframe.H4, closes, start=START)
+
+
+def _late_overstretch_h4_weak() -> list[Candle]:
+    closes = [Decimal("200")] * 10
+    current = Decimal("200")
+    for _ in range(9):
+        current += Decimal("0.2")
+        closes.append(current)
+    for _ in range(2):
+        current += Decimal("1.5")
+        closes.append(current)
+    return _candle_sequence(Timeframe.H4, closes, start=START)
+
+
+def _late_overstretch_h4_flat() -> list[Candle]:
+    closes = [Decimal("200")] * 10
+    current = Decimal("200")
+    for _ in range(10):
+        current += Decimal("0.1")
+        closes.append(current)
+    current += Decimal("1.2")
+    closes.append(current)
+    return _candle_sequence(Timeframe.H4, closes, start=START)
+
+
+def _late_overstretch_h4_mid() -> list[Candle]:
+    closes = [Decimal("200")] * 6
+    closes.extend(
+        [
+            Decimal("200.1"),
+            Decimal("200.2"),
+            Decimal("200.3"),
+            Decimal("200.4"),
+            Decimal("200.5"),
+            Decimal("200.6"),
+            Decimal("200.7"),
+            Decimal("200.8"),
+            Decimal("200.9"),
+            Decimal("201.0"),
+            Decimal("202.2"),
+            Decimal("203.4"),
+            Decimal("204.6"),
+            Decimal("205.8"),
+            Decimal("207.0"),
+        ]
+    )
+    return _candle_sequence(Timeframe.H4, closes, start=START)
+
+
+def _late_overstretch_h4_exhaust() -> list[Candle]:
+    closes = [Decimal("200")] * 6
+    current = Decimal("200")
+    for _ in range(15):
+        current += Decimal("1.5")
+        closes.append(current)
     return _candle_sequence(Timeframe.H4, closes, start=START)
 
 
@@ -262,6 +333,12 @@ def _bullish_monthly() -> list[Candle]:
             )
         )
     return candles
+
+
+def _late_overstretch_d1() -> list[Candle]:
+    closes = [Decimal("100") + Decimal(index) for index in range(160)]
+    closes.extend([Decimal("301")] * 40)
+    return _candle_sequence(Timeframe.D1, closes, start=START)
 
 
 def _bearish_monthly() -> list[Candle]:
@@ -558,6 +635,217 @@ def test_v20_strategy_fully_aligned_bullish_case_returns_buy():
         )
     )
     assert intent.type == IntentType.BUY
+
+
+def test_v20_strategy_blocks_late_overstretch_with_weak_h4_spread_and_counts_reason():
+    m15 = _bullish_m15_trigger()
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _late_overstretch_h4_weak(),
+                Timeframe.D1: _late_overstretch_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.HOLD
+    assert strategy.mid_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_flat_blocked == 0
+    assert strategy.late_overstretch_h4_weak_blocked == 1
+    assert strategy.late_overstretch_h4_exhaust_blocked == 0
+    assert strategy.late_overstretch_block_counters()[V20_MTF_LATE_OVERSTRETCH_H4_WEAK_BLOCK_REASON] == 1
+
+
+def test_v20_strategy_blocks_mid_overstretch_with_weak_h4_spread_and_counts_reason():
+    m15 = _bullish_m15_trigger()
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _late_overstretch_h4_weak(),
+                Timeframe.D1: _mid_overstretch_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.HOLD
+    assert strategy.mid_overstretch_h4_continuation_blocked == 0
+    assert strategy.mid_overstretch_h4_weak_blocked == 1
+    assert strategy.late_overstretch_h4_flat_blocked == 0
+    assert strategy.late_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_exhaust_blocked == 0
+    assert strategy.late_overstretch_block_counters()[V20_MTF_MID_OVERSTRETCH_H4_WEAK_BLOCK_REASON] == 1
+
+
+def test_v20_strategy_blocks_mid_overstretch_with_continuation_h4_spread_and_counts_reason():
+    m15 = _bullish_m15_trigger()
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _late_overstretch_h4_mid(),
+                Timeframe.D1: _mid_overstretch_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.HOLD
+    assert strategy.mid_overstretch_h4_continuation_blocked == 1
+    assert strategy.mid_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_flat_blocked == 0
+    assert strategy.late_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_exhaust_blocked == 0
+    assert strategy.late_overstretch_block_counters()[V20_MTF_MID_OVERSTRETCH_H4_CONTINUATION_BLOCK_REASON] == 1
+
+
+def test_v20_strategy_blocks_late_overstretch_with_flat_h4_spread_and_counts_reason():
+    m15 = _bullish_m15_trigger()
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _late_overstretch_h4_flat(),
+                Timeframe.D1: _late_overstretch_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.HOLD
+    assert strategy.mid_overstretch_h4_continuation_blocked == 0
+    assert strategy.mid_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_flat_blocked == 1
+    assert strategy.late_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_exhaust_blocked == 0
+    assert strategy.late_overstretch_block_counters()[V20_MTF_LATE_OVERSTRETCH_H4_FLAT_BLOCK_REASON] == 1
+
+
+def test_v20_strategy_blocks_late_overstretch_with_exhaust_h4_spread_and_counts_reason():
+    m15 = _bullish_m15_trigger()
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _late_overstretch_h4_exhaust(),
+                Timeframe.D1: _late_overstretch_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.HOLD
+    assert strategy.mid_overstretch_h4_continuation_blocked == 0
+    assert strategy.mid_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_flat_blocked == 0
+    assert strategy.late_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_exhaust_blocked == 1
+    assert strategy.late_overstretch_block_counters()[V20_MTF_LATE_OVERSTRETCH_H4_EXHAUST_BLOCK_REASON] == 1
+
+
+def test_v20_strategy_does_not_block_mid_overstretch_mid_h4_spread():
+    m15 = _bullish_m15_trigger()
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _bullish_h4(),
+                Timeframe.D1: _moderate_overstretch_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.BUY
+    assert strategy.mid_overstretch_h4_continuation_blocked == 0
+    assert strategy.mid_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_flat_blocked == 0
+    assert strategy.late_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_exhaust_blocked == 0
+
+
+def test_v20_strategy_does_not_block_late_overstretch_mid_h4_spread():
+    m15 = _bullish_m15_trigger()
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _late_overstretch_h4_mid(),
+                Timeframe.D1: _mid_overstretch_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.BUY
+    assert strategy.mid_overstretch_h4_continuation_blocked == 0
+    assert strategy.mid_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_flat_blocked == 0
+    assert strategy.late_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_exhaust_blocked == 0
+
+
+def test_v20_strategy_does_not_block_late_overstretch_mid_h4_spread():
+    m15 = _bullish_m15_trigger()
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _late_overstretch_h4_mid(),
+                Timeframe.D1: _late_overstretch_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.BUY
+    assert strategy.mid_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_flat_blocked == 0
+    assert strategy.late_overstretch_h4_weak_blocked == 0
+    assert strategy.late_overstretch_h4_exhaust_blocked == 0
 
 
 def test_v20_strategy_in_position_overbought_and_bearish_h4_returns_sell():

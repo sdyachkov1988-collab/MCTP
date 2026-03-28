@@ -7,6 +7,7 @@ from mctp.backtest.analytics import analyze_backtest
 from mctp.backtest.config import BacktestConfig
 from mctp.backtest.market_replay import BacktestCandle, MarketReplay
 from mctp.backtest.mtf_builder import IncrementalMtfBacktestBuilder
+from mctp.backtest.rolling_indicators import RollingBacktestIndicators
 from mctp.backtest.results import BacktestExecution, BacktestResult, ClosedTrade, EquityCurvePoint
 from mctp.core.constants import (
     SL_EXECUTION_BUFFER,
@@ -120,19 +121,17 @@ class BacktestEngine:
         self._current_bnb_rate: Optional[Decimal] = None
         order_counter = 0
         trade_counter = 0
-        indicator_candles: list[Candle] = []
         latest_indicators: Optional[IndicatorSnapshot] = None
         progress_milestones = self._progress_milestones(len(candles))
+        rolling_indicators = RollingBacktestIndicators(
+            ema_period=self._config.ema_period,
+            atr_period=self._config.atr_period,
+        )
 
         for index, candle in enumerate(candles):
             self._current_bnb_rate = candle.bnb_rate
             quote = self._market_replay.quote_for_candle(candle)
-            indicator_candles.append(self._indicator_candle(candle))
-            latest_indicators = self._indicator_engine.snapshot(
-                indicator_candles,
-                ema_period=self._config.ema_period,
-                atr_period=self._config.atr_period,
-            )
+            latest_indicators = rolling_indicators.update(self._indicator_candle(candle))
             ema = latest_indicators.ema
             atr = latest_indicators.atr
             risk_controller.update_atr_context(atr, candle.close)
@@ -371,23 +370,28 @@ class BacktestEngine:
         self._current_bnb_rate: Optional[Decimal] = None
         order_counter = 0
         trade_counter = 0
-        indicator_candles: list[Candle] = []
         latest_indicators: Optional[IndicatorSnapshot] = None
         progress_milestones = self._progress_milestones(len(candles))
         mtf_builder = IncrementalMtfBacktestBuilder()
+        rolling_indicators = RollingBacktestIndicators(
+            ema_period=self._config.ema_period,
+            atr_period=self._config.atr_period,
+        )
+        indicator_count = 0
 
         for index, candle in enumerate(candles):
             self._current_bnb_rate = candle.bnb_rate
             quote = self._market_replay.quote_for_candle(candle)
             indicator_candle = self._indicator_candle(candle)
-            indicator_candles.append(indicator_candle)
+            indicator_count += 1
+            latest_indicators = rolling_indicators.update(indicator_candle)
             mtf_builder.append(indicator_candle)
             current_equity = tracker.snapshot.free_quote + (tracker.snapshot.held_qty * quote.bid)
 
             if risk_controller.should_reset_daily(candle.timestamp):
                 risk_controller.reset_daily(equity=current_equity, now=candle.timestamp)
 
-            if len(indicator_candles) < required_warmup_bars:
+            if indicator_count < required_warmup_bars:
                 equity_curve.append(self._equity_point(candle.timestamp, tracker.snapshot, quote.bid, "HOLD"))
                 self._emit_progress_if_needed(
                     progress_callback=progress_callback,
@@ -400,11 +404,7 @@ class BacktestEngine:
                 )
                 continue
 
-            latest_indicators = self._indicator_engine.snapshot(
-                indicator_candles,
-                ema_period=self._config.ema_period,
-                atr_period=self._config.atr_period,
-            )
+            assert latest_indicators is not None
             atr = latest_indicators.atr
             risk_controller.update_atr_context(atr, candle.close)
 
