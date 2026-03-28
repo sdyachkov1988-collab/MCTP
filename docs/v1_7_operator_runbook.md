@@ -11,6 +11,8 @@ This runbook is for the current pre-live verification system only:
 
 It is not a live-trading runbook. It does not assume any operator action that the repository cannot actually support today.
 
+This runbook remains a `v1.7`/testnet operator artifact even though the repository now also contains accepted local `v2.0` backtest wiring. It should not be read as a specification for live `v2.0` trading operations.
+
 ## Required Starting Conditions Before Runtime Start
 
 - configuration points to the intended typed symbol and timeframe

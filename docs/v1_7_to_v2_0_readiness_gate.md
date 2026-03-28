@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document closes the boundary between completed `v1.7` live-readiness verification and the not-yet-started `v2.0` first-live implementation phase.
+This document closes the boundary between completed `v1.7` live-readiness verification and the later `v2.0` first-live implementation phase.
 
 It is a transition artifact only. It does not introduce live-trading behavior.
 
@@ -25,9 +25,9 @@ The repository has completed the following accepted pre-live verification work:
 
 ## What Remains Outside Current Scope
 
-The following are still outside the accepted repository scope at this boundary:
+The following remain outside the accepted repository scope described by this transition artifact:
 
-- `BtcUsdtMtfV20Strategy` is implemented and testnet wiring is in progress
+- `BtcUsdtMtfV20Strategy` and its testnet/backtest wiring exist in the repository, but this document does not accept or describe live `v2.0` trading behavior
 - no live production rollout yet
 - no multi-pair support
 - no regime engine
@@ -57,5 +57,5 @@ The first `v2.0` step must not pull in:
 ## Phase Boundary
 
 - `v1.7` live-readiness verification is complete
-- the next implementation phase is `v2.0`
+- subsequent implementation phases begin in `v2.0`
 - this transition gate does not add live trading by itself

@@ -4,7 +4,7 @@
 MCTP — модульная spot-платформа для deterministic backtest, paper execution и Binance Spot TESTNET runtime.
 
 ## Подтверждённая стадия
-- подтверждённая стадия: `v2.0-step2-fix` (pending acceptance)
+- подтверждённая стадия: `v2.0-step2-fix` (accepted baseline)
 - 491 тест — все зелёные (проверено локально)
 
 ## Что завершено
@@ -22,7 +22,7 @@ MCTP — модульная spot-платформа для deterministic backtes
 - `v2.0-patch1`: три CRITICAL фикса — `run_testnet_platform.py` использует `BtcUsdtMtfV20Strategy`, `_persist_snapshot()` защищён try/catch + alert, boundary leakage устранён (`ExchangeOrderStatus`/`ListOrderStatus`/`ListStatusType`/`ContingencyType` enums добавлены)
 - `v2.0-step2`: testnet wiring — `LiveMtfAggregator`, `MtfKlineManager`, 4 независимых kline канала M15/H1/H4/D1, REST priming, startup gate блокирует READY до warmup, M15 gap detection, per-TF staleness, 15 integration тестов
 - `v2.0-step2-fix`: 5 audit fixes поверх `v2.0-step2`; текущий `HEAD`/tag репозитория
-- `v2.0 backtest wiring` (локально завершён, pending acceptance): `run_backtest_csv.py` поддерживает `--strategy`, default остаётся legacy path, v2.0 backtest path использует согласованный protective OCO lifecycle и direct SELL явно отменяет локальный protective OCO без противоречивого двойного exit state
+- `v2.0 backtest wiring` (accepted baseline): `run_backtest_csv.py` поддерживает `--strategy`, default остаётся legacy path, v2.0 backtest path использует согласованный protective OCO lifecycle и direct SELL явно отменяет локальный protective OCO без противоречивого двойного exit state
 
 ## Архитектурные инварианты
 - только `Decimal` для финансовой логики
@@ -37,17 +37,17 @@ MCTP — модульная spot-платформа для deterministic backtes
 
 ### MAJOR — важно но не блокирует v2.0
 4. **`mctp/strategy/mtf.py`** — при gap в M15 данных bucket молча отбрасывается без warning. При пропусках в CSV/feed целые H4/D1 свечи исчезают без предупреждения.
-5. **`mctp/backtest/config.py:22`** — `fee_rate: Decimal = Decimal("0.001")` не из `constants.py`. Нарушение контракта 09.
-6. **`mctp/storage/order_store.py`** и **`mctp/storage/balance_cache.py`** — нет проверки `schema_version` при загрузке. `SnapshotStore` проверяет, остальные нет.
-7. **`mctp/core/enums.py`** — нет `Timeframe.MONTHLY`. Контракт 07 требует 7 TF включая Monthly.
-8. **`mctp/indicators/engine.py`** — cold-start EMA без seed от предыдущего значения. Результат расходится с реальным EMA Binance до накопления достаточной истории.
+5. **`mctp/storage/order_store.py`** и **`mctp/storage/balance_cache.py`** — нет проверки `schema_version` при загрузке. `SnapshotStore` проверяет, остальные нет.
+6. **`mctp/core/enums.py`** — нет `Timeframe.MONTHLY`. Контракт 07 требует 7 TF включая Monthly.
+7. **`mctp/indicators/engine.py`** — cold-start EMA без seed от предыдущего значения. Результат расходится с реальным EMA Binance до накопления достаточной истории.
+8. **`mctp/strategy/mtf.py`** — при gap в M15 данных bucket молча отбрасывается без warning.
 
 ### MEDIUM — технический долг
 10. **`mctp/execution/paper.py:123,192`** — `float(T_CANCEL)` для `asyncio.wait_for()`. Не финансовое значение, но отклонение от дисциплины.
 11. **`mctp/indicators/engine.py`** — magic number `Decimal("0.015")` для CCI вместо константы.
 
 ## Текущий фокус
-`v2.0 backtest wiring` локально завершён и ждёт acceptance/audit. Новый рабочий corridor после acceptance ещё не зафиксирован.
+Accepted working baseline зафиксирован на `v2.0-step2-fix` с завершённым `v2.0 backtest wiring`. Новый feature corridor после freeze ещё не зафиксирован.
 
 ## Роли инструментов в работе
 - **Claude (чат)** — архитектурные решения, roadmap compliance, системный аудит, стратегические решения
@@ -75,4 +75,4 @@ MCTP — модульная spot-платформа для deterministic backtes
 - `v1.7-final` — чистая база до v2.0 (zip сохранён отдельно)
 - `v2.0-step1` — v1.7 + стратегия + MTF агрегатор (458 тестов зелёные)
 - `v2.0-step2` — testnet wiring (478 тестов зелёные)
-- `v2.0-step2-fix` — audit fixes over step2 + completed local `v2.0 backtest wiring` (491 тест зелёный)
+- `v2.0-step2-fix` — accepted baseline: audit fixes over step2 + completed `v2.0 backtest wiring` (491 тест зелёный)
