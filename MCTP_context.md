@@ -5,7 +5,7 @@ MCTP — модульная spot-платформа для deterministic backtes
 
 ## Подтверждённая стадия
 - подтверждённая стадия: `v2.0-step2-fix` (pending acceptance)
-- 478 тестов — все зелёные (проверено локально)
+- 484 теста — все зелёные (проверено локально)
 
 ## Что завершено
 - `v0.0`-`v0.12`: core, execution, risk, sizing, portfolio/accounting, storage, streams, backtest, analytics, indicators, strategy contract, paper runtime
@@ -21,6 +21,7 @@ MCTP — модульная spot-платформа для deterministic backtes
 - `v2.0-step1`: `BtcUsdtMtfV20Strategy` (BTCUSDT only, read-only, D1/H4/H1/M15), MTF агрегатор `mctp/strategy/mtf.py` (M15→H1/H4/D1, closed candles only, UTC aligned), strategy plugin в `BacktestEngine` (STRATEGY_ID_V20_BTCUSDT_MTF), MTF wiring в `PaperRuntime`, тесты `test_v2_0_mtf_strategy.py` (10 сценариев)
 - `v2.0-patch1`: три CRITICAL фикса — `run_testnet_platform.py` использует `BtcUsdtMtfV20Strategy`, `_persist_snapshot()` защищён try/catch + alert, boundary leakage устранён (`ExchangeOrderStatus`/`ListOrderStatus`/`ListStatusType`/`ContingencyType` enums добавлены)
 - `v2.0-step2`: testnet wiring — `LiveMtfAggregator`, `MtfKlineManager`, 4 независимых kline канала M15/H1/H4/D1, REST priming, startup gate блокирует READY до warmup, M15 gap detection, per-TF staleness, 15 integration тестов
+- `v2.0-step2-fix`: 5 audit fixes поверх `v2.0-step2`; текущий `HEAD`/tag репозитория
 
 ## Архитектурные инварианты
 - только `Decimal` для финансовой логики
@@ -78,3 +79,4 @@ MCTP — модульная spot-платформа для deterministic backtes
 - `v1.7-final` — чистая база до v2.0 (zip сохранён отдельно)
 - `v2.0-step1` — v1.7 + стратегия + MTF агрегатор (458 тестов зелёные)
 - `v2.0-step2` — testnet wiring (478 тестов зелёные)
+- `v2.0-step2-fix` — audit fixes over step2 (484 теста зелёные)

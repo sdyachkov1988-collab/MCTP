@@ -2,7 +2,7 @@
 
 ## Текущая подтверждённая стадия
 - подтверждённая стадия репозитория: `v2.0-step2-fix` (pending acceptance)
-- 478 тестов зелёные
+- 484 теста зелёные
 - следующий рабочий коридор: v2.0 backtest wiring — OCO в `_run_v20_btcusdt_mtf`, `--strategy` флаг в `run_backtest_csv.py`
 
 ## Подтверждённые стадии
@@ -10,6 +10,7 @@
 - `v2.0-step1`: стратегия + MTF агрегатор + backtest/paper wiring
 - `v2.0-patch1`: три CRITICAL фикса — run_testnet_platform использует BtcUsdtMtfV20Strategy, _persist_snapshot() защищён, boundary leakage устранён, ExchangeOrderStatus/ListOrderStatus enums добавлены
 - `v2.0-step2`: testnet wiring — LiveMtfAggregator, MtfKlineManager, 4 независимых kline канала M15/H1/H4/D1, REST priming, startup gate
+- `v2.0-step2-fix`: 5 audit fixes поверх `v2.0-step2`; текущий tag/HEAD
 
 ## Архитектурные инварианты (нарушение недопустимо)
 - все финансовые значения — только `Decimal`
