@@ -6,6 +6,7 @@ from typing import Callable, Optional
 from mctp.backtest.analytics import analyze_backtest
 from mctp.backtest.config import BacktestConfig
 from mctp.backtest.market_replay import BacktestCandle, MarketReplay
+from mctp.backtest.mtf_builder import IncrementalMtfBacktestBuilder
 from mctp.backtest.results import BacktestExecution, BacktestResult, ClosedTrade, EquityCurvePoint
 from mctp.core.constants import (
     SL_EXECUTION_BUFFER,
@@ -373,11 +374,14 @@ class BacktestEngine:
         indicator_candles: list[Candle] = []
         latest_indicators: Optional[IndicatorSnapshot] = None
         progress_milestones = self._progress_milestones(len(candles))
+        mtf_builder = IncrementalMtfBacktestBuilder()
 
         for index, candle in enumerate(candles):
             self._current_bnb_rate = candle.bnb_rate
             quote = self._market_replay.quote_for_candle(candle)
-            indicator_candles.append(self._indicator_candle(candle))
+            indicator_candle = self._indicator_candle(candle)
+            indicator_candles.append(indicator_candle)
+            mtf_builder.append(indicator_candle)
             current_equity = tracker.snapshot.free_quote + (tracker.snapshot.held_qty * quote.bid)
 
             if risk_controller.should_reset_daily(candle.timestamp):
@@ -457,7 +461,7 @@ class BacktestEngine:
             strategy_input = StrategyInput(
                 snapshot=tracker.snapshot,
                 indicators={"snapshot": latest_indicators},
-                candles=build_closed_mtf_candle_map_from_m15(indicator_candles),
+                candles=mtf_builder.candle_map(),
                 onchain=None,
             )
             intent = strategy.on_candle(strategy_input)
