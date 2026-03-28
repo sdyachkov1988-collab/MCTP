@@ -5,7 +5,7 @@ MCTP — модульная spot-платформа для deterministic backtes
 
 ## Подтверждённая стадия
 - подтверждённая стадия: `v2.0-step2-fix` (accepted baseline)
-- 503 теста — все зелёные (проверено локально)
+- 508 тестов — все зелёные (проверено локально)
 
 ## Что завершено
 - `v0.0`-`v0.12`: core, execution, risk, sizing, portfolio/accounting, storage, streams, backtest, analytics, indicators, strategy contract, paper runtime
@@ -23,6 +23,7 @@ MCTP — модульная spot-платформа для deterministic backtes
 - `v2.0-step2`: testnet wiring — `LiveMtfAggregator`, `MtfKlineManager`, 4 независимых kline канала M15/H1/H4/D1, REST priming, startup gate блокирует READY до warmup, M15 gap detection, per-TF staleness, 15 integration тестов
 - `v2.0-step2-fix`: 5 audit fixes поверх `v2.0-step2`; текущий `HEAD`/tag репозитория
 - `v2.0 backtest wiring` (accepted baseline): `run_backtest_csv.py` поддерживает `--strategy`, default остаётся legacy path, v2.0 backtest path использует согласованный protective OCO lifecycle и direct SELL явно отменяет локальный protective OCO без противоречивого двойного exit state
+- timeframe foundation выровнен: supported TF layer отделён от canonical roadmap TF layer; current operational strategy/runtime остаётся 4TF (D1/H4/H1/M15)
 
 ## Архитектурные инварианты
 - только `Decimal` для финансовой логики
@@ -72,4 +73,4 @@ Accepted working baseline зафиксирован на `v2.0-step2-fix` с за
 - `v1.7-final` — чистая база до v2.0 (zip сохранён отдельно)
 - `v2.0-step1` — v1.7 + стратегия + MTF агрегатор (458 тестов зелёные)
 - `v2.0-step2` — testnet wiring (478 тестов зелёные)
-- `v2.0-step2-fix` — accepted baseline: audit fixes over step2 + completed `v2.0 backtest wiring` + closed stabilization tails (503 теста зелёные)
+- `v2.0-step2-fix` — accepted baseline: audit fixes over step2 + completed `v2.0 backtest wiring` + closed stabilization tails + explicit supported/canonical timeframe split (508 тестов зелёные)

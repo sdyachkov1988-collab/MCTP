@@ -50,7 +50,15 @@ MAX_POSITION_PCT_OF_HOURLY_VOLUME: Decimal = Decimal("0.01")
 WF_MAX_OPTIMIZE_PARAMS: int = 2
 WF_MIN_PROFITABLE_WINDOWS_PCT: Decimal = Decimal("0.50")
 CONFIG_SCHEMA_VERSION: str = "1.0.0"
-STRATEGY_TIMEFRAMES: tuple[str, ...] = ("5m", "15m", "30m", "1h", "4h", "1d", "1w", "1M")
+SUPPORTED_TIMEFRAME_VALUES: tuple[str, ...] = ("5m", "15m", "30m", "1h", "4h", "1d", "1w", "1M")
+CANONICAL_ROADMAP_TIMEFRAME_VALUES: tuple[str, ...] = ("1M", "1w", "1d", "4h", "1h", "15m", "5m")
+CANONICAL_MACRO_TIMEFRAME_VALUES: tuple[str, ...] = ("1M", "1w")
+CANONICAL_DIRECTIONAL_TIMEFRAME_VALUES: tuple[str, ...] = ("1d", "4h", "1h")
+CANONICAL_TRIGGER_TIMEFRAME_VALUES: tuple[str, ...] = ("15m",)
+CANONICAL_OPTIONAL_PRECISION_TIMEFRAME_VALUES: tuple[str, ...] = ("5m",)
+# Backward-compatible alias retained for existing callers that treat this
+# as the platform-wide supported timeframe string set.
+STRATEGY_TIMEFRAMES: tuple[str, ...] = SUPPORTED_TIMEFRAME_VALUES
 PATTERN_WEIGHT_M5: Decimal = Decimal("1.0")
 PATTERN_WEIGHT_M15: Decimal = Decimal("1.5")
 PATTERN_WEIGHT_M30: Decimal = Decimal("2.0")

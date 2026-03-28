@@ -2,7 +2,7 @@
 
 ## Текущая подтверждённая стадия
 - подтверждённая стадия репозитория: `v2.0-step2-fix` (accepted baseline)
-- 503 теста зелёные
+- 508 тестов зелёные
 - текущий рабочий фокус: freeze/acceptance baseline зафиксирован; новый corridor ещё не зафиксирован
 
 ## Подтверждённые стадии
@@ -37,6 +37,7 @@
 - `v2.0-step1` BtcUsdtMtfV20Strategy, MTF агрегатор, backtest/paper wiring
 - `v2.0-patch1` три CRITICAL фикса (boundary leakage, persist_snapshot, run_testnet_platform)
 - `v2.0-step2` testnet wiring (LiveMtfAggregator, MtfKlineManager, REST priming, startup gate)
+- timeframe foundation: supported TF layer отделён от canonical roadmap TF layer; current operational strategy/runtime остаётся 4TF (D1/H4/H1/M15)
 
 ## Известные проблемы которые нужно исправить (в порядке приоритета)
 
