@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import logging
 
 import pytest
 
@@ -378,3 +379,30 @@ def test_websocket_transport_path_exists_for_real_read_only_mode():
     transport = WebSocketJsonTransport()
     assert hasattr(transport, "connect")
     assert hasattr(transport, "receive")
+
+
+@pytest.mark.asyncio
+async def test_paper_runtime_emits_human_readable_operator_logs(tmp_path, caplog):
+    strategy = RecordingStrategy()
+    runtime = _runtime(tmp_path, strategy)
+    with caplog.at_level(logging.INFO, logger="mctp.runtime.paper"):
+        await runtime.start()
+        await runtime.channels[StreamType.BOOK_TICKER].publish(
+            BookTickerEvent(timestamp=START, bid=Decimal("100"), ask=Decimal("101"))
+        )
+        for index in range(21):
+            await runtime.channels[StreamType.KLINE].publish(
+                KlineEvent(timeframe=Timeframe.M15, candle=_candle(index, Decimal("100") + Decimal(index)))
+            )
+        await runtime.process_all_available()
+        await runtime.shutdown()
+
+    assert "paper runtime started" in caplog.text
+    assert "paper runtime closed candle received" in caplog.text
+    assert "paper runtime strategy called" in caplog.text
+    assert "paper runtime intent produced" in caplog.text
+    assert "paper runtime risk approved" in caplog.text
+    assert "paper runtime order submitted" in caplog.text
+    assert "paper runtime fill handled" in caplog.text
+    assert "paper runtime persisted financial truth" in caplog.text
+    assert "paper runtime stopped" in caplog.text

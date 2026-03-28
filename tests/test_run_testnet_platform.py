@@ -1,7 +1,11 @@
 import pytest
 
 import run_testnet_platform
-from mctp.core.constants import TESTNET_SMOKE_GUARD_ENV
+from mctp.core.constants import (
+    TESTNET_ENABLE_DEFAULT_FILE_LOGS_ENV,
+    TESTNET_SMOKE_GUARD_ENV,
+    TESTNET_STRUCTURED_LOG_PATH_ENV,
+)
 
 
 def test_run_testnet_platform_requires_explicit_smoke_guard(monkeypatch):
@@ -50,3 +54,24 @@ async def test_run_testnet_platform_main_advances_without_legacy_listen_key_stag
     await run_testnet_platform.main()
 
     assert lifecycle == ["adapter_init", "runtime_init", "start", "ping_all", "shutdown"]
+
+
+def test_testnet_optional_file_logging_paths_are_disabled_by_default(monkeypatch):
+    monkeypatch.delenv(TESTNET_ENABLE_DEFAULT_FILE_LOGS_ENV, raising=False)
+    monkeypatch.delenv(TESTNET_STRUCTURED_LOG_PATH_ENV, raising=False)
+    paths = run_testnet_platform._optional_testnet_file_logging_paths()
+    assert paths == {
+        "structured_log_path": None,
+        "audit_log_path": None,
+        "primary_alert_path": None,
+        "backup_alert_path": None,
+    }
+
+
+def test_testnet_optional_file_logging_paths_use_defaults_when_enabled(monkeypatch):
+    monkeypatch.setenv(TESTNET_ENABLE_DEFAULT_FILE_LOGS_ENV, "1")
+    paths = run_testnet_platform._optional_testnet_file_logging_paths()
+    assert paths["structured_log_path"] == "testnet_structured.log.jsonl"
+    assert paths["audit_log_path"] == "testnet_audit.log.jsonl"
+    assert paths["primary_alert_path"] == "testnet_alerts_primary.log.jsonl"
+    assert paths["backup_alert_path"] == "testnet_alerts_backup.log.jsonl"

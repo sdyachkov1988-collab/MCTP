@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
-from typing import Optional
+from typing import Callable, Optional
 
 from mctp.backtest.analytics import analyze_backtest
 from mctp.backtest.config import BacktestConfig
@@ -47,6 +47,16 @@ class ProtectiveExitState:
     realized_pnl_delta: Decimal
 
 
+@dataclass(frozen=True)
+class BacktestProgress:
+    processed_candles: int
+    total_candles: int
+    percent_complete: int
+    candle_timestamp: object
+    execution_count: int
+    trade_count: int
+
+
 class BacktestEngine:
     def __init__(self, config: BacktestConfig) -> None:
         self._config = config
@@ -55,12 +65,22 @@ class BacktestEngine:
         self._sizer = PositionSizer(config.sizer_config)
         self._indicator_engine = IndicatorEngine()
 
-    def run(self, candles: list[BacktestCandle]) -> BacktestResult:
+    def run(
+        self,
+        candles: list[BacktestCandle],
+        *,
+        progress_callback: Optional[Callable[[BacktestProgress], None]] = None,
+    ) -> BacktestResult:
         if self._config.strategy_id == STRATEGY_ID_V20_BTCUSDT_MTF:
-            return self._run_v20_btcusdt_mtf(candles)
-        return self._run_legacy_ema_cross(candles)
+            return self._run_v20_btcusdt_mtf(candles, progress_callback=progress_callback)
+        return self._run_legacy_ema_cross(candles, progress_callback=progress_callback)
 
-    def _run_legacy_ema_cross(self, candles: list[BacktestCandle]) -> BacktestResult:
+    def _run_legacy_ema_cross(
+        self,
+        candles: list[BacktestCandle],
+        *,
+        progress_callback: Optional[Callable[[BacktestProgress], None]] = None,
+    ) -> BacktestResult:
         if len(candles) < self._config.required_warmup_bars:
             return self._empty_result(candles)
 
@@ -101,6 +121,7 @@ class BacktestEngine:
         trade_counter = 0
         indicator_candles: list[Candle] = []
         latest_indicators: Optional[IndicatorSnapshot] = None
+        progress_milestones = self._progress_milestones(len(candles))
 
         for index, candle in enumerate(candles):
             self._current_bnb_rate = candle.bnb_rate
@@ -248,6 +269,15 @@ class BacktestEngine:
             equity_curve.append(self._equity_point(candle.timestamp, tracker.snapshot, quote.bid, "HOLD"))
             previous_close = candle.close
             previous_ema = ema
+            self._emit_progress_if_needed(
+                progress_callback=progress_callback,
+                milestones=progress_milestones,
+                processed_candles=index + 1,
+                total_candles=len(candles),
+                candle=candle,
+                execution_count=len(executions),
+                trade_count=trade_count,
+            )
 
         final_quote = self._market_replay.quote_for_candle(candles[-1])
         final_equity_snapshot = EquityTracker.make_snapshot(
@@ -287,7 +317,12 @@ class BacktestEngine:
         result.analytics = analyze_backtest(result)
         return result
 
-    def _run_v20_btcusdt_mtf(self, candles: list[BacktestCandle]) -> BacktestResult:
+    def _run_v20_btcusdt_mtf(
+        self,
+        candles: list[BacktestCandle],
+        *,
+        progress_callback: Optional[Callable[[BacktestProgress], None]] = None,
+    ) -> BacktestResult:
         required_warmup_bars = max(self._config.required_warmup_bars, required_m15_history_for_v20_btcusdt_mtf())
         if len(candles) < required_warmup_bars:
             return self._empty_result(candles, warmup_bars=required_warmup_bars)
@@ -328,8 +363,9 @@ class BacktestEngine:
         trade_counter = 0
         indicator_candles: list[Candle] = []
         latest_indicators: Optional[IndicatorSnapshot] = None
+        progress_milestones = self._progress_milestones(len(candles))
 
-        for candle in candles:
+        for index, candle in enumerate(candles):
             self._current_bnb_rate = candle.bnb_rate
             quote = self._market_replay.quote_for_candle(candle)
             indicator_candles.append(self._indicator_candle(candle))
@@ -503,9 +539,27 @@ class BacktestEngine:
                 trade_count += 1
                 exit_equity = tracker.snapshot.free_quote + (tracker.snapshot.held_qty * quote.bid)
                 risk_controller.on_trade_result(realized_delta, exit_equity, now=candle.timestamp)
+                self._emit_progress_if_needed(
+                    progress_callback=progress_callback,
+                    milestones=progress_milestones,
+                    processed_candles=index + 1,
+                    total_candles=len(candles),
+                    candle=candle,
+                    execution_count=len(executions),
+                    trade_count=trade_count,
+                )
                 continue
 
             equity_curve.append(self._equity_point(candle.timestamp, tracker.snapshot, quote.bid, "HOLD"))
+            self._emit_progress_if_needed(
+                progress_callback=progress_callback,
+                milestones=progress_milestones,
+                processed_candles=index + 1,
+                total_candles=len(candles),
+                candle=candle,
+                execution_count=len(executions),
+                trade_count=trade_count,
+            )
 
         final_quote = self._market_replay.quote_for_candle(candles[-1])
         final_equity_snapshot = EquityTracker.make_snapshot(
@@ -938,3 +992,34 @@ class BacktestEngine:
     def _assert_non_negative_free_quote(snapshot: PortfolioSnapshot) -> None:
         if snapshot.free_quote < -SPOT_BACKTEST_FREE_QUOTE_EPSILON:
             raise AssertionError("spot backtest buy made free_quote materially negative")
+
+    @staticmethod
+    def _progress_milestones(total_candles: int) -> set[int]:
+        if total_candles <= 0:
+            return set()
+        return {max(1, (total_candles * pct) // 10) for pct in range(1, 11)} | {total_candles}
+
+    @staticmethod
+    def _emit_progress_if_needed(
+        *,
+        progress_callback: Optional[Callable[[BacktestProgress], None]],
+        milestones: set[int],
+        processed_candles: int,
+        total_candles: int,
+        candle: BacktestCandle,
+        execution_count: int,
+        trade_count: int,
+    ) -> None:
+        if progress_callback is None or processed_candles not in milestones:
+            return
+        percent_complete = int((processed_candles * 100) / total_candles) if total_candles > 0 else 100
+        progress_callback(
+            BacktestProgress(
+                processed_candles=processed_candles,
+                total_candles=total_candles,
+                percent_complete=percent_complete,
+                candle_timestamp=candle.timestamp,
+                execution_count=execution_count,
+                trade_count=trade_count,
+            )
+        )

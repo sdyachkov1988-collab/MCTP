@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -48,6 +49,9 @@ from mctp.sizing.config import SizerConfig
 from mctp.sizing.sizer import PositionSizer
 from mctp.strategy import StrategyBase, StrategyInput, build_closed_mtf_candle_map_from_m15
 from mctp.streams.base import StreamType, refresh_stale_flags
+
+
+_logger = logging.getLogger(__name__)
 
 
 class PaperRuntimeStatus(Enum):
@@ -153,6 +157,12 @@ class PaperRuntime:
         for channel in self.channels.values():
             await channel.connect()
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        _logger.info(
+            "paper runtime started symbol=%s timeframe=%s warmup_bars=%d",
+            self.config.symbol.to_exchange_str(),
+            self.config.timeframe.value,
+            self.config.warmup_bars,
+        )
 
     async def ping_all(self, now: Optional[datetime] = None) -> None:
         for channel in self.channels.values():
@@ -202,6 +212,11 @@ class PaperRuntime:
         self.channels[StreamType.USER_DATA].state.is_stale = effective_flags[StreamType.USER_DATA]
         if effective_flags[StreamType.KLINE]:
             self.status = PaperRuntimeStatus.HALT
+            _logger.warning(
+                "paper runtime halted due to stale kline stream symbol=%s at=%s",
+                self.config.symbol.to_exchange_str(),
+                now.isoformat(),
+            )
 
     async def tick(self, now: Optional[datetime] = None) -> None:
         checkpoint = now if now is not None else datetime.now(timezone.utc)
@@ -209,6 +224,7 @@ class PaperRuntime:
         await self.evaluate_staleness(checkpoint)
 
     async def shutdown(self) -> None:
+        _logger.info("paper runtime shutdown started symbol=%s", self.config.symbol.to_exchange_str())
         if self._heartbeat_task is not None:
             self._heartbeat_task.cancel()
             try:
@@ -224,6 +240,7 @@ class PaperRuntime:
         for channel in self.channels.values():
             await channel.disconnect()
         self.status = PaperRuntimeStatus.STOPPED
+        _logger.info("paper runtime stopped symbol=%s", self.config.symbol.to_exchange_str())
 
     async def _dispatch(self, stream_type: StreamType, event: object) -> None:
         if stream_type == StreamType.KLINE:
@@ -252,6 +269,12 @@ class PaperRuntime:
             return
         history = self.candles.setdefault(event.timeframe, [])
         history.append(event.candle)
+        _logger.info(
+            "paper runtime closed candle received timeframe=%s timestamp=%s history_len=%d",
+            event.timeframe.value,
+            event.candle.timestamp.isoformat(),
+            len(history),
+        )
         if self.adaptive_risk.should_reset_daily(event.candle.timestamp):
             self.adaptive_risk.reset_daily(
                 equity=self._current_equity(mark_price=event.candle.close),
@@ -270,9 +293,25 @@ class PaperRuntime:
         )
         self.last_strategy_input = strategy_input
         self.strategy_call_count += 1
+        _logger.info(
+            "paper runtime strategy called timeframe=%s call_count=%d timestamp=%s",
+            event.timeframe.value,
+            self.strategy_call_count,
+            event.candle.timestamp.isoformat(),
+        )
         intent = self.strategy.on_candle(strategy_input)
         self.last_intent = intent
+        _logger.info(
+            "paper runtime intent produced type=%s reason=%s timestamp=%s",
+            intent.type.value,
+            intent.reason,
+            intent.timestamp.isoformat(),
+        )
         if self.status != PaperRuntimeStatus.RUNNING:
+            _logger.warning(
+                "paper runtime skipped intent execution because status=%s",
+                self.status.value,
+            )
             return
         await self._execute_intent(intent, event.candle.timestamp)
 
@@ -298,6 +337,13 @@ class PaperRuntime:
                 pnl = self.portfolio.realized_pnl(event.fill)
             self.portfolio.on_fill(event.fill)
             self.handled_fills.append(event.fill)
+            _logger.info(
+                "paper runtime fill handled side=%s quantity=%s price=%s timestamp=%s",
+                event.fill.side.value,
+                event.fill.base_qty_filled,
+                event.fill.fill_price,
+                event.fill.filled_at.isoformat(),
+            )
             if pnl is not None:
                 self.adaptive_risk.on_trade_result(
                     pnl.net_pnl,
@@ -308,6 +354,11 @@ class PaperRuntime:
         if isinstance(event, OutboundAccountPositionEvent):
             channel.touch(event.timestamp)
             self.balance_cache_store.save(event.balances, event.timestamp)
+            _logger.info(
+                "paper runtime balances persisted assets=%d timestamp=%s",
+                len(event.balances),
+                event.timestamp.isoformat(),
+            )
             return
         raise AssertionError("USER_DATA channel received unknown event")
 
@@ -343,10 +394,21 @@ class PaperRuntime:
         if intent.type == IntentType.HOLD:
             return
         if self._entry_blocked(intent):
+            _logger.info(
+                "paper runtime intent blocked by operational mode mode=%s type=%s",
+                self.adaptive_risk.operational_mode.value,
+                intent.type.value,
+            )
             return
         risk_result = self.risk_layer.check(intent, self.portfolio.snapshot, self.config.instrument_info)
         if not risk_result.approved:
+            _logger.info(
+                "paper runtime risk rejected type=%s reason=%s",
+                intent.type.value,
+                risk_result.rejection_reason.value if risk_result.rejection_reason is not None else None,
+            )
             return
+        _logger.info("paper runtime risk approved type=%s", intent.type.value)
         order = self._order_from_intent(intent, timestamp)
         if order is None:
             return
@@ -354,6 +416,13 @@ class PaperRuntime:
         self.executor.set_event_time(timestamp)
         execution_price = self._price_for_intent(intent)
         self.executor.set_price(self.config.symbol, execution_price)
+        _logger.info(
+            "paper runtime order submitted side=%s quantity=%s price=%s timestamp=%s",
+            order.side.value,
+            order.quantity,
+            execution_price,
+            timestamp.isoformat(),
+        )
         result = await self.executor.submit_order(order)
         if result != ExecutionResult.FILLED:
             return
@@ -469,3 +538,9 @@ class PaperRuntime:
         balances = await self.executor.get_balances()
         self.balance_cache_store.save(balances, self.current_runtime_time)
         self.accounting_store.save(self.portfolio.accounting.fill_history)
+        _logger.info(
+            "paper runtime persisted financial truth snapshot=%s balances=%s accounting_entries=%d",
+            self.snapshot_store.exists(),
+            self.balance_cache_store.exists(),
+            len(self.portfolio.accounting.fill_history),
+        )

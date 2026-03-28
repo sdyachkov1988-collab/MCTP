@@ -62,10 +62,26 @@ def test_main_supports_explicit_v20_strategy(monkeypatch, capsys):
     assert "strategy_id=v20_btcusdt_mtf" in captured
 
 
-def _install_main_stubs(monkeypatch, *, strategy_id: str = STRATEGY_ID_LEGACY_EMA_CROSS) -> None:
+def test_main_prints_backtest_progress_to_stderr(monkeypatch, capsys):
+    _install_main_stubs(monkeypatch, emit_progress=True)
+    run_backtest_csv.main()
+    captured = capsys.readouterr()
+    assert "backtest_progress" in captured.err
+    assert "processed=10/100" in captured.err
+    assert "execution_count=1" in captured.err
+    assert "trade_count=1" in captured.err
+
+
+def _install_main_stubs(
+    monkeypatch,
+    *,
+    strategy_id: str = STRATEGY_ID_LEGACY_EMA_CROSS,
+    emit_progress: bool = False,
+) -> None:
     symbol = Symbol("BTC", "USDT", run_backtest_csv.Market.SPOT)
-    candle = SimpleNamespace(timestamp=UTC_NOW)
-    load_result = SimpleNamespace(source="sample.csv", candles=[candle, candle])
+    candle_count = 100 if emit_progress else 2
+    candles = [SimpleNamespace(timestamp=UTC_NOW) for _ in range(candle_count)]
+    load_result = SimpleNamespace(source="sample.csv", candles=candles)
 
     monkeypatch.setattr(
         run_backtest_csv,
@@ -89,8 +105,19 @@ def _install_main_stubs(monkeypatch, *, strategy_id: str = STRATEGY_ID_LEGACY_EM
         def __init__(self, config):
             self._config = config
 
-        def run(self, candles):
+        def run(self, candles, *, progress_callback=None):
             assert candles == load_result.candles
+            if emit_progress and progress_callback is not None:
+                progress_callback(
+                    SimpleNamespace(
+                        processed_candles=10,
+                        total_candles=100,
+                        percent_complete=10,
+                        candle_timestamp=UTC_NOW,
+                        execution_count=1,
+                        trade_count=1,
+                    )
+                )
             return SimpleNamespace(
                 start_equity=Decimal("10000"),
                 end_equity=Decimal("10010"),
@@ -120,4 +147,3 @@ def _install_main_stubs(monkeypatch, *, strategy_id: str = STRATEGY_ID_LEGACY_EM
         return original_config(*args, **kwargs)
 
     monkeypatch.setattr(run_backtest_csv, "BacktestConfig", checking_config)
-

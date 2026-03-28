@@ -1,4 +1,5 @@
 import argparse
+import sys
 from decimal import Decimal
 from pathlib import Path
 
@@ -53,6 +54,18 @@ def build_instrument_info() -> dict[str, Decimal]:
     }
 
 
+def _print_backtest_progress(progress) -> None:
+    print(
+        "backtest_progress "
+        f"processed={progress.processed_candles}/{progress.total_candles} "
+        f"percent={progress.percent_complete}% "
+        f"timestamp={progress.candle_timestamp.isoformat()} "
+        f"execution_count={progress.execution_count} "
+        f"trade_count={progress.trade_count}",
+        file=sys.stderr,
+    )
+
+
 def main() -> None:
     args = parse_args()
     symbol = parse_symbol(args.symbol)
@@ -69,7 +82,7 @@ def main() -> None:
         spread_bps=Decimal(args.spread_bps),
         strategy_id=args.strategy,
     )
-    result = BacktestEngine(config).run(load_result.candles)
+    result = BacktestEngine(config).run(load_result.candles, progress_callback=_print_backtest_progress)
     print(f"csv_source={load_result.source}")
     print(f"symbol={symbol.base}{symbol.quote}")
     print(f"strategy_id={config.strategy_id}")

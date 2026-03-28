@@ -3,7 +3,14 @@ import os
 from decimal import Decimal
 
 from mctp.adapters import BinanceCredentials, BinanceSpotTestnetAdapterV1, BinanceSpotTestnetConfigV1
-from mctp.core.constants import TESTNET_SMOKE_GUARD_ENV
+from mctp.core.constants import (
+    TESTNET_AUDIT_LOG_PATH_ENV,
+    TESTNET_BACKUP_ALERT_PATH_ENV,
+    TESTNET_ENABLE_DEFAULT_FILE_LOGS_ENV,
+    TESTNET_PRIMARY_ALERT_PATH_ENV,
+    TESTNET_SMOKE_GUARD_ENV,
+    TESTNET_STRUCTURED_LOG_PATH_ENV,
+)
 from mctp.core.enums import Market, Timeframe
 from mctp.core.types import Symbol
 from mctp.runtime.testnet import TestnetRuntime, TestnetRuntimeConfig
@@ -22,6 +29,25 @@ def _require_smoke_guard() -> None:
     )
 
 
+def _optional_testnet_file_logging_paths() -> dict[str, str | None]:
+    use_default_files = os.getenv(TESTNET_ENABLE_DEFAULT_FILE_LOGS_ENV) == "1"
+    structured_log_path = os.getenv(TESTNET_STRUCTURED_LOG_PATH_ENV)
+    audit_log_path = os.getenv(TESTNET_AUDIT_LOG_PATH_ENV)
+    primary_alert_path = os.getenv(TESTNET_PRIMARY_ALERT_PATH_ENV)
+    backup_alert_path = os.getenv(TESTNET_BACKUP_ALERT_PATH_ENV)
+    if use_default_files:
+        structured_log_path = structured_log_path or "testnet_structured.log.jsonl"
+        audit_log_path = audit_log_path or "testnet_audit.log.jsonl"
+        primary_alert_path = primary_alert_path or "testnet_alerts_primary.log.jsonl"
+        backup_alert_path = backup_alert_path or "testnet_alerts_backup.log.jsonl"
+    return {
+        "structured_log_path": structured_log_path,
+        "audit_log_path": audit_log_path,
+        "primary_alert_path": primary_alert_path,
+        "backup_alert_path": backup_alert_path,
+    }
+
+
 async def main() -> None:
     _require_smoke_guard()
     api_key = os.getenv("BINANCE_TESTNET_API_KEY")
@@ -29,6 +55,7 @@ async def main() -> None:
     if not api_key or not api_secret:
         raise SystemExit("BINANCE_TESTNET_API_KEY and BINANCE_TESTNET_API_SECRET are required")
 
+    file_logging_paths = _optional_testnet_file_logging_paths()
     symbol = Symbol("BTC", "USDT", Market.SPOT)
     adapter = BinanceSpotTestnetAdapterV1(
         BinanceSpotTestnetConfigV1(BinanceCredentials(api_key=api_key, api_secret=api_secret))
@@ -44,6 +71,10 @@ async def main() -> None:
                 "min_notional": Decimal("10"),
             },
             initial_balances={"BTC": Decimal("0"), "USDT": Decimal("0")},
+            structured_log_path=file_logging_paths["structured_log_path"],
+            audit_log_path=file_logging_paths["audit_log_path"],
+            primary_alert_path=file_logging_paths["primary_alert_path"],
+            backup_alert_path=file_logging_paths["backup_alert_path"],
         ),
         strategy=BtcUsdtMtfV20Strategy(),
         executor=adapter,
