@@ -64,7 +64,7 @@ python -m pytest tests/ -v
 python -m pytest tests/ -q
 ```
 
-Current local baseline: `508 passed`.
+Current local baseline: `510 passed`.
 
 ## Скрипты
 Deterministic demo backtest:

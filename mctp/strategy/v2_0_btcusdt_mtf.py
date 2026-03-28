@@ -12,12 +12,15 @@ from mctp.core.constants import (
     V20_MTF_H1_RSI_PERIOD,
     V20_MTF_H4_EMA_FAST_PERIOD,
     V20_MTF_H4_EMA_SLOW_PERIOD,
+    V20_MTF_M15_ATR_PERIOD,
+    V20_MTF_M15_TRIGGER_MIN_BODY_ATR_RATIO,
     V20_MTF_SELL_REASON,
 )
 from mctp.core.enums import IntentType, Market, QuantityMode, Timeframe
 from mctp.core.types import Intent
 from mctp.indicators import IndicatorEngine
 from mctp.indicators.levels import pivot_points
+from mctp.indicators.models import IndicatorSnapshot
 from mctp.indicators.patterns import detect_weighted_patterns
 
 from .base import StrategyBase
@@ -76,6 +79,16 @@ class BtcUsdtMtfV20Strategy(StrategyBase):
             return hold
         if not (h1_rsi > V20_MTF_H1_RSI_ENTRY_MIN and h1_rsi < V20_MTF_H1_RSI_ENTRY_MAX):
             return hold
+
+        m15_atr = self._resolve_m15_atr(input, m15)
+        if m15_atr is None or m15_atr <= Decimal("0"):
+            return hold
+
+        latest_m15 = m15[-1]
+        trigger_body = abs(latest_m15.close - latest_m15.open)
+        if trigger_body < (m15_atr * V20_MTF_M15_TRIGGER_MIN_BODY_ATR_RATIO):
+            return hold
+
         latest_patterns = detect_weighted_patterns(m15, Timeframe.M15, engine=self._indicator_engine)
         if not any(signal.name == "bullish_engulfing" for signal in latest_patterns):
             return hold
@@ -93,3 +106,9 @@ class BtcUsdtMtfV20Strategy(StrategyBase):
         if m15:
             return m15[-1].timestamp
         return input.snapshot.timestamp
+
+    def _resolve_m15_atr(self, input: StrategyInput, m15: list) -> Decimal | None:
+        snapshot = input.indicators.get("snapshot")
+        if isinstance(snapshot, IndicatorSnapshot) and snapshot.atr is not None:
+            return snapshot.atr
+        return self._indicator_engine.atr(m15, V20_MTF_M15_ATR_PERIOD)

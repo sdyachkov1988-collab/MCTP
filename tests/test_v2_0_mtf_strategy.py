@@ -4,9 +4,14 @@ from decimal import Decimal
 import pytest
 
 from mctp.backtest import BacktestCandle, BacktestConfig, BacktestEngine
-from mctp.core.constants import STRATEGY_ID_V20_BTCUSDT_MTF, V20_MTF_REQUIRED_M15_CANDLES
+from mctp.core.constants import (
+    STRATEGY_ID_V20_BTCUSDT_MTF,
+    V20_MTF_M15_ATR_PERIOD,
+    V20_MTF_REQUIRED_M15_CANDLES,
+)
 from mctp.core.enums import IntentType, Market, QuantityMode, Timeframe
 from mctp.core.types import Intent, PortfolioSnapshot, Symbol
+from mctp.indicators import IndicatorEngine
 from mctp.indicators.models import Candle
 from mctp.runtime import KlineEvent
 from mctp.runtime.paper import PaperRuntime, PaperRuntimeConfig
@@ -81,7 +86,7 @@ def _candle_sequence(
 
 
 def _bullish_m15_trigger() -> list[Candle]:
-    return [
+    trigger = [
         Candle(
             timestamp=START,
             open=Decimal("110"),
@@ -101,10 +106,11 @@ def _bullish_m15_trigger() -> list[Candle]:
             closed=True,
         ),
     ]
+    return _prepend_m15_context(trigger)
 
 
 def _neutral_m15_trigger() -> list[Candle]:
-    return [
+    trigger = [
         Candle(
             timestamp=START,
             open=Decimal("110"),
@@ -124,6 +130,35 @@ def _neutral_m15_trigger() -> list[Candle]:
             closed=True,
         ),
     ]
+    return _prepend_m15_context(trigger)
+
+
+def _prepend_m15_context(trigger: list[Candle], *, tr: Decimal = Decimal("4")) -> list[Candle]:
+    prehistory: list[Candle] = []
+    base_close = Decimal("100")
+    half_tr = tr / Decimal("2")
+    for index in range(V20_MTF_M15_ATR_PERIOD, 0, -1):
+        timestamp = START - timedelta(minutes=15 * index)
+        close = base_close + Decimal(V20_MTF_M15_ATR_PERIOD - index) / Decimal("100")
+        prehistory.append(
+            Candle(
+                timestamp=timestamp,
+                open=close,
+                high=close + half_tr,
+                low=close - half_tr,
+                close=close,
+                volume=Decimal("1"),
+                closed=True,
+            )
+        )
+    return prehistory + trigger
+
+
+def _strategy_indicators(m15: list[Candle]) -> dict[str, object]:
+    engine = IndicatorEngine()
+    return {
+        "snapshot": engine.snapshot(m15, ema_period=9, atr_period=V20_MTF_M15_ATR_PERIOD),
+    }
 
 
 def _strong_bullish_d1() -> list[Candle]:
@@ -366,12 +401,13 @@ def test_m15_gap_dropped_bucket_emits_warning(caplog: pytest.LogCaptureFixture):
 
 
 def test_v20_strategy_incomplete_context_returns_hold():
+    m15 = _bullish_m15_trigger()
     strategy = BtcUsdtMtfV20Strategy()
     intent = strategy.on_candle(
         StrategyInput(
             snapshot=_snapshot(),
-            indicators={},
-            candles={Timeframe.M15: _bullish_m15_trigger()},
+            indicators=_strategy_indicators(m15),
+            candles={Timeframe.M15: m15},
             onchain=None,
         )
     )
@@ -379,13 +415,14 @@ def test_v20_strategy_incomplete_context_returns_hold():
 
 
 def test_v20_strategy_bearish_daily_filter_returns_hold():
+    m15 = _bullish_m15_trigger()
     strategy = BtcUsdtMtfV20Strategy()
     intent = strategy.on_candle(
         StrategyInput(
             snapshot=_snapshot(),
-            indicators={},
+            indicators=_strategy_indicators(m15),
             candles={
-                Timeframe.M15: _bullish_m15_trigger(),
+                Timeframe.M15: m15,
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _bearish_d1(),
@@ -397,13 +434,14 @@ def test_v20_strategy_bearish_daily_filter_returns_hold():
 
 
 def test_v20_strategy_weak_trend_zone_near_ema200_returns_hold():
+    m15 = _bullish_m15_trigger()
     strategy = BtcUsdtMtfV20Strategy()
     intent = strategy.on_candle(
         StrategyInput(
             snapshot=_snapshot(),
-            indicators={},
+            indicators=_strategy_indicators(m15),
             candles={
-                Timeframe.M15: _bullish_m15_trigger(),
+                Timeframe.M15: m15,
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _weak_trend_d1(),
@@ -415,13 +453,14 @@ def test_v20_strategy_weak_trend_zone_near_ema200_returns_hold():
 
 
 def test_v20_strategy_conflicting_h4_h1_m15_conditions_return_hold():
+    m15 = _neutral_m15_trigger()
     strategy = BtcUsdtMtfV20Strategy()
     intent = strategy.on_candle(
         StrategyInput(
             snapshot=_snapshot(),
-            indicators={},
+            indicators=_strategy_indicators(m15),
             candles={
-                Timeframe.M15: _neutral_m15_trigger(),
+                Timeframe.M15: m15,
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _strong_bullish_d1(),
@@ -433,13 +472,14 @@ def test_v20_strategy_conflicting_h4_h1_m15_conditions_return_hold():
 
 
 def test_v20_strategy_fully_aligned_bullish_case_returns_buy():
+    m15 = _bullish_m15_trigger()
     strategy = BtcUsdtMtfV20Strategy()
     intent = strategy.on_candle(
         StrategyInput(
             snapshot=_snapshot(),
-            indicators={},
+            indicators=_strategy_indicators(m15),
             candles={
-                Timeframe.M15: _bullish_m15_trigger(),
+                Timeframe.M15: m15,
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _strong_bullish_d1(),
@@ -451,13 +491,14 @@ def test_v20_strategy_fully_aligned_bullish_case_returns_buy():
 
 
 def test_v20_strategy_in_position_overbought_and_bearish_h4_returns_sell():
+    m15 = _bullish_m15_trigger()
     strategy = BtcUsdtMtfV20Strategy()
     intent = strategy.on_candle(
         StrategyInput(
             snapshot=_snapshot(in_position=True),
-            indicators={},
+            indicators=_strategy_indicators(m15),
             candles={
-                Timeframe.M15: _bullish_m15_trigger(),
+                Timeframe.M15: m15,
                 Timeframe.H1: _h1_overbought(),
                 Timeframe.H4: _bearish_h4(),
             },
@@ -468,13 +509,14 @@ def test_v20_strategy_in_position_overbought_and_bearish_h4_returns_sell():
 
 
 def test_v20_strategy_non_btcusdt_symbol_returns_hold():
+    m15 = _bullish_m15_trigger()
     strategy = BtcUsdtMtfV20Strategy()
     intent = strategy.on_candle(
         StrategyInput(
             snapshot=_snapshot(symbol=ETHUSDT),
-            indicators={},
+            indicators=_strategy_indicators(m15),
             candles={
-                Timeframe.M15: _bullish_m15_trigger(),
+                Timeframe.M15: m15,
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _strong_bullish_d1(),
@@ -483,6 +525,88 @@ def test_v20_strategy_non_btcusdt_symbol_returns_hold():
         )
     )
     assert intent.type == IntentType.HOLD
+
+
+def test_v20_strategy_atr_layer_rejects_tiny_trigger_body_in_high_volatility():
+    trigger = [
+        Candle(
+            timestamp=START,
+            open=Decimal("110"),
+            high=Decimal("118"),
+            low=Decimal("102"),
+            close=Decimal("108"),
+            volume=Decimal("1"),
+            closed=True,
+        ),
+        Candle(
+            timestamp=START + timedelta(minutes=15),
+            open=Decimal("107.8"),
+            high=Decimal("118"),
+            low=Decimal("102"),
+            close=Decimal("108.2"),
+            volume=Decimal("1"),
+            closed=True,
+        ),
+    ]
+    m15 = _prepend_m15_context(trigger, tr=Decimal("12"))
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _bullish_h4(),
+                Timeframe.D1: _strong_bullish_d1(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.HOLD
+
+
+def test_backtest_v20_strategy_passes_indicator_snapshot_with_atr(monkeypatch):
+    captured: list[StrategyInput] = []
+
+    class RecordingStrategy:
+        requires_mtf_warmup = True
+
+        def __init__(self, indicator_engine) -> None:
+            self._indicator_engine = indicator_engine
+
+        def on_candle(self, input: StrategyInput):
+            captured.append(input)
+            return Intent(
+                type=IntentType.HOLD,
+                symbol=input.snapshot.symbol,
+                timestamp=input.snapshot.timestamp,
+            )
+
+    monkeypatch.setattr("mctp.backtest.engine.BtcUsdtMtfV20Strategy", RecordingStrategy)
+
+    BacktestEngine(
+        BacktestConfig(
+            symbol=BTCUSDT,
+            initial_quote=Decimal("10000"),
+            warmup_bars=5,
+            ema_period=3,
+            atr_period=14,
+            instrument_info=_instrument_info(),
+            strategy_id=STRATEGY_ID_V20_BTCUSDT_MTF,
+        )
+    ).run(_long_backtest_history(V20_MTF_REQUIRED_M15_CANDLES + 1))
+
+    assert captured
+    snapshot = captured[-1].indicators.get("snapshot")
+    assert snapshot is not None
+    assert snapshot.atr is not None
+    assert set(captured[-1].candles) == {
+        Timeframe.M15,
+        Timeframe.H1,
+        Timeframe.H4,
+        Timeframe.D1,
+    }
 
 
 def test_backtest_v20_strategy_runs_without_breaking_legacy_default():

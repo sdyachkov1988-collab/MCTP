@@ -402,7 +402,7 @@ class BacktestEngine:
 
             strategy_input = StrategyInput(
                 snapshot=tracker.snapshot,
-                indicators={},
+                indicators={"snapshot": latest_indicators},
                 candles=build_closed_mtf_candle_map_from_m15(indicator_candles),
                 onchain=None,
             )
