@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -70,6 +70,44 @@ def test_main_prints_backtest_progress_to_stderr(monkeypatch, capsys):
     assert "processed=10/100" in captured.err
     assert "execution_count=1" in captured.err
     assert "trade_count=1" in captured.err
+
+
+def test_backtest_progress_is_emitted_during_warmup_heavy_v20_path():
+    from mctp.backtest import BacktestCandle, BacktestConfig, BacktestEngine
+
+    symbol = Symbol("BTC", "USDT", run_backtest_csv.Market.SPOT)
+    candles = []
+    for index in range(19205):
+        candles.append(
+            BacktestCandle(
+                timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(minutes=15 * index),
+                open=Decimal("100"),
+                high=Decimal("101"),
+                low=Decimal("99"),
+                close=Decimal("100"),
+                volume=Decimal("1"),
+                bnb_rate=Decimal("300"),
+            )
+        )
+    progress_events = []
+    engine = BacktestEngine(
+        BacktestConfig(
+            symbol=symbol,
+            initial_quote=Decimal("10000"),
+            warmup_bars=5,
+            ema_period=3,
+            atr_period=14,
+            instrument_info=run_backtest_csv.build_instrument_info(),
+            strategy_id=STRATEGY_ID_V20_BTCUSDT_MTF,
+        )
+    )
+
+    engine.run(candles, progress_callback=progress_events.append)
+
+    assert progress_events
+    assert progress_events[0].processed_candles <= 1920
+    assert progress_events[0].percent_complete >= 9
+    assert progress_events[0].processed_candles < 19200
 
 
 def _install_main_stubs(

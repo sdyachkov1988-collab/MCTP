@@ -16,7 +16,7 @@ from mctp.storage.snapshot_store import SnapshotStore
 from mctp.streams.base import StreamType
 from mctp.strategy.models import StrategyInput
 from run_backtest import run_demo_backtest
-from run_paper_runtime import main as run_paper_main, run_local_demo
+from run_paper_runtime import _configure_operator_logging, main as run_paper_main, run_local_demo
 
 
 BTCUSDT = Symbol("BTC", "USDT", Market.SPOT)
@@ -181,6 +181,28 @@ def test_run_paper_runtime_websocket_demo_mode_is_honestly_disabled(monkeypatch)
     monkeypatch.setattr("sys.argv", ["run_paper_runtime.py", "websocket"])
     with pytest.raises(SystemExit, match="Only local demo mode is supported"):
         asyncio.run(run_paper_main())
+
+
+def test_run_paper_runtime_configures_operator_logging(monkeypatch):
+    import logging
+
+    root_logger = logging.getLogger()
+    previous_handlers = list(root_logger.handlers)
+    previous_level = root_logger.level
+    for handler in list(root_logger.handlers):
+        root_logger.removeHandler(handler)
+    try:
+        _configure_operator_logging()
+        assert root_logger.handlers
+        assert root_logger.level == logging.INFO
+        assert root_logger.handlers[0].formatter is not None
+        assert "%(asctime)sZ" in root_logger.handlers[0].formatter._fmt
+    finally:
+        for handler in list(root_logger.handlers):
+            root_logger.removeHandler(handler)
+        for handler in previous_handlers:
+            root_logger.addHandler(handler)
+        root_logger.setLevel(previous_level)
 
 
 def test_legacy_inline_indicator_helpers_are_clearly_deprecated_but_compatible():

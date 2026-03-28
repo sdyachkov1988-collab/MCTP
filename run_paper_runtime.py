@@ -1,5 +1,7 @@
 import asyncio
+import logging
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from tempfile import TemporaryDirectory
@@ -19,6 +21,25 @@ from mctp.storage.accounting_store import AccountingStore
 from mctp.storage.balance_cache import BalanceCacheStore
 from mctp.storage.snapshot_store import SnapshotStore
 from mctp.streams.base import StreamType
+
+
+class _UtcLogFormatter(logging.Formatter):
+    converter = time.gmtime
+
+
+def _configure_operator_logging() -> None:
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        _UtcLogFormatter(
+            fmt="%(asctime)sZ %(levelname)s %(name)s: %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S",
+        )
+    )
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.INFO)
 
 
 async def run_local_demo() -> dict[str, object]:
@@ -101,6 +122,7 @@ async def main() -> None:
         raise SystemExit(
             "Only local demo mode is supported in run_paper_runtime.py; websocket transport remains library/runtime support, not a demo entrypoint."
         )
+    _configure_operator_logging()
     summary = await run_local_demo()
     for key, value in summary.items():
         print(f"{key}={value}")

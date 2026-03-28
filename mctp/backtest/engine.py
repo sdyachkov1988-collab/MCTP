@@ -184,6 +184,15 @@ class BacktestEngine:
                 equity_curve.append(self._equity_point(candle.timestamp, tracker.snapshot, quote.bid, "HOLD"))
                 previous_close = candle.close
                 previous_ema = ema
+                self._emit_progress_if_needed(
+                    progress_callback=progress_callback,
+                    milestones=progress_milestones,
+                    processed_candles=index + 1,
+                    total_candles=len(candles),
+                    candle=candle,
+                    execution_count=len(executions),
+                    trade_count=trade_count,
+                )
                 continue
 
             if (
@@ -376,6 +385,15 @@ class BacktestEngine:
 
             if len(indicator_candles) < required_warmup_bars:
                 equity_curve.append(self._equity_point(candle.timestamp, tracker.snapshot, quote.bid, "HOLD"))
+                self._emit_progress_if_needed(
+                    progress_callback=progress_callback,
+                    milestones=progress_milestones,
+                    processed_candles=index + 1,
+                    total_candles=len(candles),
+                    candle=candle,
+                    execution_count=len(executions),
+                    trade_count=trade_count,
+                )
                 continue
 
             latest_indicators = self._indicator_engine.snapshot(
