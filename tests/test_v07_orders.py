@@ -2,6 +2,7 @@
 Тесты v0.7: should_record (регрессия), OrderStore, OrderTracker,
              WsEventDeduplicator, SpotPaperExecutor + OrderStore интеграция.
 """
+import json
 import pytest
 from decimal import Decimal
 from datetime import datetime, timezone, timedelta
@@ -9,12 +10,12 @@ from datetime import datetime, timezone, timedelta
 from mctp.core.types import Symbol, PortfolioSnapshot
 from mctp.core.enums import Market, Side, OrderType, TimeInForce, CommissionAsset
 from mctp.core.order import Order, Fill
-from mctp.core.constants import N_SNAP, SL_EXECUTION_BUFFER
+from mctp.core.constants import CONFIG_SCHEMA_VERSION, N_SNAP, SL_EXECUTION_BUFFER, T_CANCEL
 
 from mctp.portfolio.equity import EquityTracker
 
 from mctp.storage.order_store import OrderStore
-from mctp.storage.exceptions import StorageCorruptedError
+from mctp.storage.exceptions import StorageCorruptedError, StorageSchemaMismatchError
 
 from mctp.execution.order_tracker import OrderTracker
 from mctp.execution.paper import SpotPaperExecutor
@@ -224,6 +225,34 @@ def test_order_store_multiple_orders(tmp_path):
     assert order3.client_order_id in orders
 
 
+def test_order_store_saves_schema_version(tmp_path):
+    store = OrderStore(str(tmp_path / "orders.json"))
+    store.save_order(_make_limit_order())
+    raw = json.loads((tmp_path / "orders.json").read_text())
+    assert raw["schema_version"] == CONFIG_SCHEMA_VERSION
+
+
+def test_order_store_rejects_wrong_schema_version(tmp_path):
+    path = tmp_path / "orders.json"
+    path.write_text(json.dumps({
+        "schema_version": "0.0.0",
+        "active_orders": {},
+        "active_ocos": {},
+    }))
+    with pytest.raises(StorageSchemaMismatchError):
+        OrderStore(str(path)).load()
+
+
+def test_order_store_rejects_missing_schema_version(tmp_path):
+    path = tmp_path / "orders.json"
+    path.write_text(json.dumps({
+        "active_orders": {},
+        "active_ocos": {},
+    }))
+    with pytest.raises(StorageSchemaMismatchError):
+        OrderStore(str(path)).load()
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # OrderTracker
 # ════════════════════════════════════════════════════════════════════════════
@@ -407,3 +436,41 @@ async def test_paper_oco_triggered_removed_from_store(tmp_path):
     executor.set_price(BTCUSDT, Decimal("46000"))
     _, ocos = store.load()
     assert oco.list_order_id not in ocos
+
+
+@pytest.mark.asyncio
+async def test_paper_cancel_order_uses_raw_t_cancel(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    async def _fake_wait_for(awaitable, timeout):
+        captured["timeout"] = timeout
+        return await awaitable
+
+    monkeypatch.setattr("mctp.execution.paper.asyncio.wait_for", _fake_wait_for)
+
+    executor = SpotPaperExecutor({"USDT": Decimal("10000"), "BTC": Decimal("0")})
+    order = _make_limit_order()
+    await executor.submit_order(order)
+    await executor.cancel_order(order.client_order_id)
+
+    assert captured["timeout"] == T_CANCEL
+    assert isinstance(captured["timeout"], int)
+
+
+@pytest.mark.asyncio
+async def test_paper_cancel_oco_uses_raw_t_cancel(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    async def _fake_wait_for(awaitable, timeout):
+        captured["timeout"] = timeout
+        return await awaitable
+
+    monkeypatch.setattr("mctp.execution.paper.asyncio.wait_for", _fake_wait_for)
+
+    executor = SpotPaperExecutor({"USDT": Decimal("10000"), "BTC": Decimal("1")})
+    oco = _make_oco()
+    executor.submit_oco(oco)
+    await executor.cancel_oco(oco.list_order_id)
+
+    assert captured["timeout"] == T_CANCEL
+    assert isinstance(captured["timeout"], int)

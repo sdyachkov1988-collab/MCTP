@@ -8,11 +8,12 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
+from mctp.core.constants import CONFIG_SCHEMA_VERSION
 from mctp.core.types import Symbol
 from mctp.core.enums import Market, Side, OrderType, CommissionAsset, QuantitySource, TimeInForce
 from mctp.core.order import Order, Fill
 from mctp.execution.oco import OCOOrder, OCOStatus
-from mctp.storage.exceptions import StorageCorruptedError
+from mctp.storage.exceptions import StorageCorruptedError, StorageSchemaMismatchError
 
 
 # ── Serialisation helpers ─────────────────────────────────────────────────────
@@ -183,9 +184,20 @@ class OrderStore:
         try:
             with open(self._path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            if "schema_version" not in data:
+                raise StorageSchemaMismatchError(
+                    f"OrderStore: schema_version key missing in {self._path}"
+                )
+            if data["schema_version"] != CONFIG_SCHEMA_VERSION:
+                raise StorageSchemaMismatchError(
+                    f"OrderStore: schema version mismatch: "
+                    f"expected {CONFIG_SCHEMA_VERSION}, got {data['schema_version']}"
+                )
             orders = {coid: _des_order(v) for coid, v in data.get("active_orders", {}).items()}
             ocos   = {lid:  _des_oco(v)   for lid,  v in data.get("active_ocos",   {}).items()}
             return orders, ocos
+        except StorageSchemaMismatchError:
+            raise
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
             raise StorageCorruptedError(
                 f"OrderStore file is corrupted: {self._path}"
@@ -205,6 +217,7 @@ class OrderStore:
 
     def _flush(self) -> None:
         data = {
+            "schema_version": CONFIG_SCHEMA_VERSION,
             "active_orders": {coid: _ser_order(o) for coid, o in self._orders.items()},
             "active_ocos":   {lid:  _ser_oco(oco)  for lid,  oco in self._ocos.items()},
         }

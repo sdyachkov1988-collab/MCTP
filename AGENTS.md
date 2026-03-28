@@ -2,7 +2,7 @@
 
 ## Текущая подтверждённая стадия
 - подтверждённая стадия репозитория: `v2.0-step2-fix` (accepted baseline)
-- 491 тест зелёный
+- 503 теста зелёные
 - текущий рабочий фокус: freeze/acceptance baseline зафиксирован; новый corridor ещё не зафиксирован
 
 ## Подтверждённые стадии
@@ -40,16 +40,15 @@
 
 ## Известные проблемы которые нужно исправить (в порядке приоритета)
 
-### MAJOR
-4. `mctp/strategy/mtf.py` — нет warning при молчаливом отбрасывании bucket при gap в данных
-5. `mctp/storage/order_store.py` и `balance_cache.py` — нет проверки schema_version
-6. `mctp/core/enums.py` — нет `Timeframe.MONTHLY`
-7. `mctp/indicators/engine.py` — cold-start EMA без seed
-8. `mctp/strategy/mtf.py` — нет warning при молчаливом отбрасывании bucket при gap в данных
+Текущий подтверждённый stabilization batch закрыт:
+- `schema_version` добавлен в `BalanceCacheStore` и `OrderStore`
+- M15 gap / dropped bucket path в `mctp/strategy/mtf.py` теперь пишет warning
+- `Timeframe.MONTHLY` добавлен
+- `float(T_CANCEL)` убран
+- EMA использует явный SMA seed
+- CCI scaling constant вынесен в `mctp/core/constants.py`
 
-### MEDIUM
-10. `mctp/execution/paper.py:123` — `float(T_CANCEL)` отклонение от Decimal дисциплины
-11. `mctp/indicators/engine.py` — magic number для CCI не из constants.py
+Новый feature corridor после freeze всё ещё не зафиксирован.
 
 ## Следующая задача для агента
 Acceptance/freeze завершён для baseline `v2.0-step2-fix`. Следующий feature corridor ещё не зафиксирован.

@@ -25,6 +25,7 @@ class Timeframe(Enum):
     H4 = "4h"
     D1 = "1d"
     W1 = "1w"
+    MONTHLY = "1M"
 
 
 class TimeInForce(Enum):

@@ -7,6 +7,7 @@ import pytest
 from mctp.backtest.config import BacktestConfig
 from mctp.backtest.engine import BacktestEngine
 from mctp.backtest.market_replay import BacktestCandle
+from mctp.core.constants import CCI_SCALING_CONSTANT, STRATEGY_TIMEFRAMES
 from mctp.core.enums import CommissionAsset, IntentType, Market, OrderType, Timeframe
 from mctp.core.types import Intent, PortfolioSnapshot, Symbol
 from mctp.execution.software_stop import SoftwareTrailingStop
@@ -108,7 +109,18 @@ def test_indicator_engine_ema_is_deterministic():
         _candle(1, "12", "12", "12", "12"),
         _candle(2, "14", "14", "14", "14"),
     ]
-    assert engine.ema(candles, period=3) == Decimal("12.5")
+    assert engine.ema(candles, period=3) == Decimal("12")
+
+
+def test_indicator_engine_ema_uses_sma_seed_before_recursive_updates():
+    engine = IndicatorEngine()
+    candles = [
+        _candle(0, "10", "10", "10", "10"),
+        _candle(1, "12", "12", "12", "12"),
+        _candle(2, "14", "14", "14", "14"),
+        _candle(3, "16", "16", "16", "16"),
+    ]
+    assert engine.ema(candles, period=3) == Decimal("14")
 
 
 def test_indicator_engine_sma_is_deterministic():
@@ -160,6 +172,20 @@ def test_indicator_engine_cci_is_deterministic():
     assert engine.cci(candles, period=3).quantize(Decimal("0.1")) == Decimal("100.0")
 
 
+def test_indicator_engine_cci_uses_named_scaling_constant():
+    engine = IndicatorEngine()
+    candles = [
+        _candle(0, "9", "10", "8", "9"),
+        _candle(1, "10", "11", "9", "10"),
+        _candle(2, "11", "12", "10", "11"),
+    ]
+    typical_prices = [(c.high + c.low + c.close) / Decimal("3") for c in candles]
+    sma_tp = sum(typical_prices, Decimal("0")) / Decimal("3")
+    mean_deviation = sum((abs(tp - sma_tp) for tp in typical_prices), Decimal("0")) / Decimal("3")
+    expected = (typical_prices[-1] - sma_tp) / (CCI_SCALING_CONSTANT * mean_deviation)
+    assert engine.cci(candles, period=3) == expected
+
+
 def test_indicator_engine_atr_is_deterministic():
     engine = IndicatorEngine()
     candles = [
@@ -193,9 +219,9 @@ def test_indicator_engine_keltner_channels_are_deterministic():
         _candle(3, "13", "14", "12", "13"),
     ]
     mid, upper, lower = engine.keltner_channels(candles, period=3, atr_mult=Decimal("2"))
-    assert mid == Decimal("12.125")
-    assert upper == Decimal("16.125")
-    assert lower == Decimal("8.125")
+    assert mid == Decimal("12")
+    assert upper == Decimal("16")
+    assert lower == Decimal("8")
 
 
 def test_indicator_engine_obv_is_deterministic():
@@ -268,12 +294,19 @@ def test_multi_timeframe_warmup_requirement_is_computed_correctly():
             Timeframe.H4: 120,
             Timeframe.D1: 200,
             Timeframe.W1: 20,
+            Timeframe.MONTHLY: 12,
         }
     )
     req_map = {item.timeframe: item.bars_required for item in requirements}
     assert req_map[Timeframe.D1] == 200
     assert req_map[Timeframe.W1] == 20
-    assert len(requirements) == 7
+    assert req_map[Timeframe.MONTHLY] == 12
+    assert len(requirements) == 8
+
+
+def test_monthly_timeframe_is_part_of_declared_strategy_timeframes():
+    assert Timeframe.MONTHLY.value == "1M"
+    assert "1M" in STRATEGY_TIMEFRAMES
 
 
 def test_backtest_uses_indicator_engine_instead_of_inline_path(monkeypatch: pytest.MonkeyPatch):

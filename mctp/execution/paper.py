@@ -120,7 +120,7 @@ class SpotPaperExecutor(ExecutionInterface):
             return ExecutionResult.CANCELLED
 
         try:
-            result = await asyncio.wait_for(_do(), timeout=float(T_CANCEL))
+            result = await asyncio.wait_for(_do(), timeout=T_CANCEL)
         except asyncio.TimeoutError:
             return ExecutionResult.REJECTED
         if result == ExecutionResult.CANCELLED and self._order_store is not None:
@@ -189,7 +189,7 @@ class SpotPaperExecutor(ExecutionInterface):
             return ExecutionResult.CANCELLED
 
         try:
-            result = await asyncio.wait_for(_do(), timeout=float(T_CANCEL))
+            result = await asyncio.wait_for(_do(), timeout=T_CANCEL)
         except asyncio.TimeoutError:
             return ExecutionResult.REJECTED
         if result == ExecutionResult.CANCELLED and self._order_store is not None:

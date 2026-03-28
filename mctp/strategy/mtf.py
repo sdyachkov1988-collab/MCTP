@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Sequence
@@ -13,6 +14,7 @@ from mctp.core.enums import Timeframe
 from mctp.indicators.models import Candle
 
 
+_logger = logging.getLogger(__name__)
 _BASE_CANDLE_INTERVAL = timedelta(minutes=V20_MTF_BASE_TIMEFRAME_MINUTES)
 _EXPECTED_BUCKET_SIZES: dict[Timeframe, int] = {
     Timeframe.H1: V20_MTF_M15_PER_H1,
@@ -46,11 +48,25 @@ def aggregate_closed_m15_candles(base_candles: Sequence[Candle], timeframe: Time
         bucket_start = _bucket_start_for_timeframe(candle.timestamp, timeframe)
         buckets.setdefault(bucket_start, []).append(candle)
     aggregated: list[Candle] = []
+    latest_bucket_start = max(buckets) if buckets else None
     for bucket_start in sorted(buckets):
         bucket = buckets[bucket_start]
         if len(bucket) != expected_bucket_size:
+            if bucket_start != latest_bucket_start:
+                _logger.warning(
+                    "Dropping %s bucket at %s: expected %d M15 candles, got %d",
+                    timeframe.value,
+                    bucket_start.isoformat(),
+                    expected_bucket_size,
+                    len(bucket),
+                )
             continue
         if not _is_complete_bucket(bucket, bucket_start):
+            _logger.warning(
+                "Dropping %s bucket at %s: M15 candles are not contiguous",
+                timeframe.value,
+                bucket_start.isoformat(),
+            )
             continue
         aggregated.append(
             Candle(

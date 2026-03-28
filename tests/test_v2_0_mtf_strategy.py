@@ -340,6 +340,31 @@ def test_m15_to_higher_timeframes_is_utc_aligned_and_closed_only():
     assert candles[Timeframe.D1][0].timestamp == START
 
 
+def test_m15_gap_dropped_bucket_emits_warning(caplog: pytest.LogCaptureFixture):
+    base: list[Candle] = []
+    for index in [0, 2, 3, 4, 5, 6, 7]:
+        timestamp = START + timedelta(minutes=15 * index)
+        close = Decimal("100") + Decimal(index)
+        base.append(
+            Candle(
+                timestamp=timestamp,
+                open=close,
+                high=close + Decimal("1"),
+                low=close - Decimal("1"),
+                close=close,
+                volume=Decimal("1"),
+                closed=True,
+            )
+        )
+
+    with caplog.at_level("WARNING"):
+        candles = build_closed_mtf_candle_map_from_m15(base)
+
+    assert len(candles[Timeframe.H1]) == 1
+    assert candles[Timeframe.H1][0].timestamp == START + timedelta(hours=1)
+    assert "Dropping 1h bucket" in caplog.text
+
+
 def test_v20_strategy_incomplete_context_returns_hold():
     strategy = BtcUsdtMtfV20Strategy()
     intent = strategy.on_candle(

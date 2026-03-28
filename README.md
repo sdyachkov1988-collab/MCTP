@@ -64,7 +64,7 @@ python -m pytest tests/ -v
 python -m pytest tests/ -q
 ```
 
-Current local baseline: `491 passed`.
+Current local baseline: `503 passed`.
 
 ## Скрипты
 Deterministic demo backtest:
@@ -97,9 +97,9 @@ Testnet runtime entrypoint:
 python run_testnet_platform.py
 ```
 
-## v1.7 Operational Readiness Artifacts
+## Current Baseline Operational Docs
 
-The repository now includes narrow v1.7 operator-facing verification artifacts:
+The repository now includes current baseline operator-facing docs:
 
 - [docs/README.md](./docs/README.md)
 - [docs/v1_7_operator_runbook.md](./docs/v1_7_operator_runbook.md)
@@ -108,7 +108,7 @@ The repository now includes narrow v1.7 operator-facing verification artifacts:
 - [docs/v1_7_operator_intervention_rules.md](./docs/v1_7_operator_intervention_rules.md)
 - [docs/v1_7_to_v2_0_readiness_gate.md](./docs/v1_7_to_v2_0_readiness_gate.md)
 
-These artifacts document the accepted testnet/pre-live operator behavior. They do not claim live-trading support, and they do not by themselves document the completed local `v2.0` backtest wiring.
+These artifacts document the accepted testnet/pre-live operator behavior for the current `v2.0-step2-fix` baseline. They do not claim live-trading support.
 
 ## Важная оговорка про testnet
 Binance Spot TESTNET используется только для проверки integration/mechanics. Его ликвидность, книги и fills не считаются рыночно-реалистичными и не доказывают качество стратегии.

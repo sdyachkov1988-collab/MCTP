@@ -2,12 +2,14 @@ from decimal import Decimal
 from typing import Iterable, Sequence
 
 from mctp.core.constants import (
+    CCI_SCALING_CONSTANT,
     PATTERN_WEIGHT_D1,
     PATTERN_WEIGHT_H1,
     PATTERN_WEIGHT_H4,
     PATTERN_WEIGHT_M15,
     PATTERN_WEIGHT_M30,
     PATTERN_WEIGHT_M5,
+    PATTERN_WEIGHT_MONTHLY,
     PATTERN_WEIGHT_W1,
 )
 from mctp.core.enums import Timeframe
@@ -23,6 +25,7 @@ _TIMEFRAME_WEIGHTS: dict[Timeframe, Decimal] = {
     Timeframe.H4: PATTERN_WEIGHT_H4,
     Timeframe.D1: PATTERN_WEIGHT_D1,
     Timeframe.W1: PATTERN_WEIGHT_W1,
+    Timeframe.MONTHLY: PATTERN_WEIGHT_MONTHLY,
 }
 
 
@@ -31,8 +34,8 @@ class IndicatorEngine:
         if len(candles) < period:
             return None
         multiplier = Decimal("2") / Decimal(period + 1)
-        ema_value = candles[0].close
-        for candle in candles[1:]:
+        ema_value = sum((candle.close for candle in candles[:period]), Decimal("0")) / Decimal(period)
+        for candle in candles[period:]:
             ema_value = ((candle.close - ema_value) * multiplier) + ema_value
         return ema_value
 
@@ -110,7 +113,7 @@ class IndicatorEngine:
         mean_deviation = sum((abs(tp - sma_tp) for tp in typical_prices), Decimal("0")) / Decimal(period)
         if mean_deviation == Decimal("0"):
             return Decimal("0")
-        return (typical_prices[-1] - sma_tp) / (Decimal("0.015") * mean_deviation)
+        return (typical_prices[-1] - sma_tp) / (CCI_SCALING_CONSTANT * mean_deviation)
 
     def atr(self, candles: Sequence[Candle], period: int) -> Decimal | None:
         if len(candles) < period + 1:

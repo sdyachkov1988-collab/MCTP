@@ -5,7 +5,7 @@ MCTP — модульная spot-платформа для deterministic backtes
 
 ## Подтверждённая стадия
 - подтверждённая стадия: `v2.0-step2-fix` (accepted baseline)
-- 491 тест — все зелёные (проверено локально)
+- 503 теста — все зелёные (проверено локально)
 
 ## Что завершено
 - `v0.0`-`v0.12`: core, execution, risk, sizing, portfolio/accounting, storage, streams, backtest, analytics, indicators, strategy contract, paper runtime
@@ -33,18 +33,15 @@ MCTP — модульная spot-платформа для deterministic backtes
 - paper mode и testnet mode остаются разделёнными
 - константы только из `mctp/core/constants.py`
 
-## Известные проблемы из аудита (требуют решения)
+## Известные проблемы из аудита
 
-### MAJOR — важно но не блокирует v2.0
-4. **`mctp/strategy/mtf.py`** — при gap в M15 данных bucket молча отбрасывается без warning. При пропусках в CSV/feed целые H4/D1 свечи исчезают без предупреждения.
-5. **`mctp/storage/order_store.py`** и **`mctp/storage/balance_cache.py`** — нет проверки `schema_version` при загрузке. `SnapshotStore` проверяет, остальные нет.
-6. **`mctp/core/enums.py`** — нет `Timeframe.MONTHLY`. Контракт 07 требует 7 TF включая Monthly.
-7. **`mctp/indicators/engine.py`** — cold-start EMA без seed от предыдущего значения. Результат расходится с реальным EMA Binance до накопления достаточной истории.
-8. **`mctp/strategy/mtf.py`** — при gap в M15 данных bucket молча отбрасывается без warning.
-
-### MEDIUM — технический долг
-10. **`mctp/execution/paper.py:123,192`** — `float(T_CANCEL)` для `asyncio.wait_for()`. Не финансовое значение, но отклонение от дисциплины.
-11. **`mctp/indicators/engine.py`** — magic number `Decimal("0.015")` для CCI вместо константы.
+Подтверждённый stabilization batch закрыт:
+- `schema_version` добавлен в `BalanceCacheStore` и `OrderStore`
+- M15 gap / dropped bucket path в `mctp/strategy/mtf.py` теперь пишет warning
+- `Timeframe.MONTHLY` добавлен на enum/constants уровне
+- `float(T_CANCEL)` убран без изменения семантики
+- EMA использует явный SMA seed
+- CCI scaling constant вынесен в `mctp/core/constants.py`
 
 ## Текущий фокус
 Accepted working baseline зафиксирован на `v2.0-step2-fix` с завершённым `v2.0 backtest wiring`. Новый feature corridor после freeze ещё не зафиксирован.
@@ -62,7 +59,7 @@ Accepted working baseline зафиксирован на `v2.0-step2-fix` с за
 - 44: критерии фьючерсов — оценивается при v2.2
 - 45-53: мультипары, ML, on-chain, anomaly, research — фазы v2.3-v5.0
 - 54: адаптивный риск — реализован частично (уровни 1,3,5.1,5.2,6,7,9), остальное фазируется
-- 07: 7 TF — частично (Monthly отсутствует в enum, добавить до v2.3)
+- 07: 7 TF — `MONTHLY` теперь добавлен на enum/constants уровне; широкий downstream scope не расширялся
 
 ## Что явно вне текущего scope
 - production live trading readiness
@@ -75,4 +72,4 @@ Accepted working baseline зафиксирован на `v2.0-step2-fix` с за
 - `v1.7-final` — чистая база до v2.0 (zip сохранён отдельно)
 - `v2.0-step1` — v1.7 + стратегия + MTF агрегатор (458 тестов зелёные)
 - `v2.0-step2` — testnet wiring (478 тестов зелёные)
-- `v2.0-step2-fix` — accepted baseline: audit fixes over step2 + completed `v2.0 backtest wiring` (491 тест зелёный)
+- `v2.0-step2-fix` — accepted baseline: audit fixes over step2 + completed `v2.0 backtest wiring` + closed stabilization tails (503 теста зелёные)

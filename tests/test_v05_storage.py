@@ -180,6 +180,34 @@ def test_balance_cache_updated_at_utc_required(tmp_path):
         store.save({"USDT": Decimal("100")}, datetime.now())  # naive
 
 
+def test_balance_cache_saves_schema_version(tmp_path):
+    store = BalanceCacheStore(str(tmp_path / "cache.json"))
+    store.save({"USDT": Decimal("100")}, datetime.now(timezone.utc))
+    raw = json.loads((tmp_path / "cache.json").read_text())
+    assert raw["schema_version"] == CONFIG_SCHEMA_VERSION
+
+
+def test_balance_cache_rejects_wrong_schema_version(tmp_path):
+    path = tmp_path / "cache.json"
+    path.write_text(json.dumps({
+        "schema_version": "0.0.0",
+        "balances": {"USDT": "100"},
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }))
+    with pytest.raises(StorageSchemaMismatchError):
+        BalanceCacheStore(str(path)).load()
+
+
+def test_balance_cache_rejects_missing_schema_version(tmp_path):
+    path = tmp_path / "cache.json"
+    path.write_text(json.dumps({
+        "balances": {"USDT": "100"},
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }))
+    with pytest.raises(StorageSchemaMismatchError):
+        BalanceCacheStore(str(path)).load()
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # Schema validation
 # ════════════════════════════════════════════════════════════════════════════

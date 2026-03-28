@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from mctp.storage.exceptions import StorageCorruptedError
+from mctp.core.constants import CONFIG_SCHEMA_VERSION
+from mctp.storage.exceptions import StorageCorruptedError, StorageSchemaMismatchError
 
 
 class BalanceCacheStore:
@@ -28,6 +29,7 @@ class BalanceCacheStore:
         if updated_at.tzinfo is None:
             raise ValueError("BalanceCacheStore.save: updated_at must be UTC-aware")
         data = {
+            "schema_version": CONFIG_SCHEMA_VERSION,
             "balances":   {asset: str(amount) for asset, amount in balances.items()},
             "updated_at": updated_at.isoformat(),
         }
@@ -42,6 +44,15 @@ class BalanceCacheStore:
         try:
             with open(self._path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            if "schema_version" not in data:
+                raise StorageSchemaMismatchError(
+                    f"BalanceCacheStore: schema_version key missing in {self._path}"
+                )
+            if data["schema_version"] != CONFIG_SCHEMA_VERSION:
+                raise StorageSchemaMismatchError(
+                    f"BalanceCacheStore: schema version mismatch: "
+                    f"expected {CONFIG_SCHEMA_VERSION}, got {data['schema_version']}"
+                )
             balances = {
                 asset: Decimal(amount_str)
                 for asset, amount_str in data["balances"].items()
@@ -50,6 +61,8 @@ class BalanceCacheStore:
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=timezone.utc)
             return balances, ts
+        except StorageSchemaMismatchError:
+            raise
         except (json.JSONDecodeError, KeyError) as exc:
             raise StorageCorruptedError(
                 f"BalanceCacheStore file is corrupted: {self._path}"
