@@ -65,7 +65,7 @@ python -m pytest tests/ -v
 python -m pytest tests/ -q
 ```
 
-Current local baseline: `512 passed`.
+Current local baseline: `518 passed`.
 
 ## Скрипты
 Deterministic demo backtest:
@@ -86,17 +86,23 @@ CSV backtest with explicit v2.0 MTF strategy:
 python run_backtest_csv.py --csv data/market/spot/BTCUSDT-1m-2025-01.csv --symbol BTCUSDT --strategy v20_btcusdt_mtf
 ```
 
+Long CSV backtests now emit compact progress updates to `stderr` during the run, including warmup-heavy v2.0 paths.
+
 Local paper runtime demo:
 
 ```bash
 python run_paper_runtime.py
 ```
 
+`run_paper_runtime.py` now enables human-readable UTC operator logs by default, while still printing the final summary at the end.
+
 Testnet runtime entrypoint:
 
 ```bash
 python run_testnet_platform.py
 ```
+
+Optional testnet file logging can be enabled with `MCTP_TESTNET_ENABLE_FILE_LOGS=1` or with explicit env paths for structured/audit/alert log files. The script remains smoke-only.
 
 ## Current Baseline Operational Docs
 

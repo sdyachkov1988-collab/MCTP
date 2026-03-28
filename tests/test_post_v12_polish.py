@@ -205,6 +205,33 @@ def test_run_paper_runtime_configures_operator_logging(monkeypatch):
         root_logger.setLevel(previous_level)
 
 
+def test_run_paper_runtime_main_enables_operator_logging_before_demo(monkeypatch, capsys):
+    lifecycle: list[str] = []
+
+    def fake_configure_logging() -> None:
+        lifecycle.append("configure_logging")
+
+    async def fake_run_local_demo() -> dict[str, object]:
+        lifecycle.append("run_local_demo")
+        return {
+            "mode": "local",
+            "runtime_status_before_shutdown": "RUNNING",
+            "runtime_status_after_shutdown": "STOPPED",
+        }
+
+    monkeypatch.setattr("sys.argv", ["run_paper_runtime.py"])
+    monkeypatch.setattr("run_paper_runtime._configure_operator_logging", fake_configure_logging)
+    monkeypatch.setattr("run_paper_runtime.run_local_demo", fake_run_local_demo)
+
+    asyncio.run(run_paper_main())
+
+    captured = capsys.readouterr()
+    assert lifecycle == ["configure_logging", "run_local_demo"]
+    assert "mode=local" in captured.out
+    assert "runtime_status_before_shutdown=RUNNING" in captured.out
+    assert "runtime_status_after_shutdown=STOPPED" in captured.out
+
+
 def test_legacy_inline_indicator_helpers_are_clearly_deprecated_but_compatible():
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
