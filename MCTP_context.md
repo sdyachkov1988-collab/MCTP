@@ -1,78 +1,81 @@
-# MCTP — Контекст для нового чата
+# MCTP Context
 
-## Назначение
-MCTP — модульная spot-платформа для deterministic backtest, paper execution и Binance Spot TESTNET runtime.
+## Purpose
+MCTP is a modular spot trading platform for deterministic backtest, paper execution, and Binance Spot TESTNET runtime.
 
-## Подтверждённая стадия
-- подтверждённая стадия: `v2.0-step2-fix` (accepted baseline)
-- 512 тестов — все зелёные (проверено локально)
+## Historical Accepted Baseline
+- accepted historical baseline: `v2.0-step2-fix`
 
-## Что завершено
+## Current Local Working State
+- historical baseline preserved
+- accepted local `v2.0 backtest wiring` is present
+- backtest hot-path optimization is present
+- `v20_btcusdt_mtf` has a narrow guard family shaped by post-baseline research
+- current local full test baseline: `533 passed, 9 warnings`
+
+## Implemented Scope
 - `v0.0`-`v0.12`: core, execution, risk, sizing, portfolio/accounting, storage, streams, backtest, analytics, indicators, strategy contract, paper runtime
-- `v1.0`: testnet adapter v1, authenticated REST/WS path, private user stream, listenKey lifecycle, real OCO submit, bounded account refresh, delisting detection plumbing
-- `v1.1`: exchange-authoritative balance cache handling, external OCO cancel monitoring, software-stop fallback, symbol-change procedure
-- `v1.2`: startup synchronization gate, startup balance refresh, missing-basis handling, startup OCO consistency, gap-risk startup handling, restart-time protection guarantee
-- `v1.3`: restart reconciliation, reconnect balance refresh, OCO outage-fill reconciliation with cached `bnb_rate`, manual-trade detection and basis-adjustment path
-- `v1.4`: structured JSON logs, hash-chain audit log, before/after decision capture, heartbeat, latency/memory monitoring, smoke-only Strategy Performance Monitor on testnet
-- `v1.5`: structured alerting with primary/backup delivery and runtime-owned heartbeat-timeout watchdog
-- `v1.6`: safety controls, closed-candle enforcement, OCO pre-submit validation, controlled snapshot transitions, monotonic order-status handling, supervised critical background tasks, retry-safe delisting forced exit, bounded execution-state retention, conservative startup OCO ambiguity handling
-- post-`v1.6` consistency hardening: single-source exchange-truth application split, pending/in-flight submit guard, cancel-active-OCO-before-direct-sell handling, conservative single-unknown startup OCO handling, broader restart consistency for outstanding order / partial-fill state
-- `v1.7`: scenario matrix, chaos/integration coverage, 4 independent WS stream checks, operator readiness artifacts (runbook, checklist, incident journal, operator intervention rules, BALANCE_CACHE_TTL verification), transition gate document
-- `v2.0-step1`: `BtcUsdtMtfV20Strategy` (BTCUSDT only, read-only, D1/H4/H1/M15), MTF агрегатор `mctp/strategy/mtf.py` (M15→H1/H4/D1, closed candles only, UTC aligned), strategy plugin в `BacktestEngine` (STRATEGY_ID_V20_BTCUSDT_MTF), MTF wiring в `PaperRuntime`, тесты `test_v2_0_mtf_strategy.py` (10 сценариев)
-- `v2.0-patch1`: три CRITICAL фикса — `run_testnet_platform.py` использует `BtcUsdtMtfV20Strategy`, `_persist_snapshot()` защищён try/catch + alert, boundary leakage устранён (`ExchangeOrderStatus`/`ListOrderStatus`/`ListStatusType`/`ContingencyType` enums добавлены)
-- `v2.0-step2`: testnet wiring — `LiveMtfAggregator`, `MtfKlineManager`, 4 независимых kline канала M15/H1/H4/D1, REST priming, startup gate блокирует READY до warmup, M15 gap detection, per-TF staleness, 15 integration тестов
-- `v2.0-step2-fix`: 5 audit fixes поверх `v2.0-step2`; текущий `HEAD`/tag репозитория
-- `v2.0 backtest wiring` (accepted baseline): `run_backtest_csv.py` поддерживает `--strategy`, default остаётся legacy path, v2.0 backtest path использует согласованный protective OCO lifecycle и direct SELL явно отменяет локальный protective OCO без противоречивого двойного exit state
-- timeframe foundation выровнен: supported TF layer отделён от canonical roadmap TF layer; current operational strategy/runtime остаётся 4TF (D1/H4/H1/M15)
-- первая 4TF стратегия улучшена через M15 ATR как volatility/risk layer: signal core остаётся D1/H4/H1/M15, ATR используется как entry execution sanity layer и согласован с уже существующим ATR-based sizing/protective context
-- `MONTHLY/W1` подключены в первую стратегию как read-only macro context layer: macro bias подаётся в strategy input через derived closed-candle maps, но trading core остаётся D1/H4/H1/M15; `M5` и `M30` не втягивались в active logic
+- `v1.0`-`v1.7`: testnet adapter, synchronization/reconciliation, observability, alerting, safety/reliability hardening, scenario matrix, operator artifacts
+- `v2.0-step1`: `BtcUsdtMtfV20Strategy`, MTF aggregation, backtest/paper wiring
+- `v2.0-patch1`: critical fixes around boundary safety and runtime wiring
+- `v2.0-step2`: testnet MTF wiring with `LiveMtfAggregator`, `MtfKlineManager`, independent `M15/H1/H4/D1` channels, REST priming, startup gate
+- `v2.0-step2-fix`: accepted baseline after audit fixes
+- local `v2.0 backtest wiring`: `--strategy` flag in `run_backtest_csv.py`, backward-compatible legacy default, OCO/protective handling aligned in `_run_v20_btcusdt_mtf`
+- local backtest hot-path optimization: incremental rolling indicator path for heavy CSV backtests
+- local `v20_btcusdt_mtf` guard family:
+  - `D1 >= 30%` and `H4 < 0.5%`
+  - `D1 >= 30%` and `0.5% <= H4 < 1.0%`
+  - `D1 >= 30%` and `H4 >= 2.0%`
+  - `10% <= D1 < 20%` and `0.5% <= H4 < 1.0%`
+  - `10% <= D1 < 20%` and `1.0% <= H4 < 2.0%`
 
-## Архитектурные инварианты
-- только `Decimal` для финансовой логики
-- только UTC-aware timestamps
-- `Symbol` остаётся типизированным объектом
-- strategy layer остаётся read-only
-- exchange-specific преобразования остаются внутри adapter/runtime boundary
-- paper mode и testnet mode остаются разделёнными
-- константы только из `mctp/core/constants.py`
+## Current Local Backtest Reference
+### Full 2024
+- `execution_count=34`
+- `trade_count=17`
+- `end_equity=10099.88783325915940214285715`
+- `realized_pnl_total=99.88783325915940214285714652`
+- `profit_factor=1.162970696212725768760993567`
+- `max_drawdown_pct=0.02300367002048603745724802941`
 
-## Известные проблемы из аудита
+### Full 2025
+- `execution_count=18`
+- `trade_count=9`
+- `end_equity=9769.109399677787024285714303`
+- `realized_pnl_total=-230.8906003222129757142856982`
+- `profit_factor=0.3724160082990711736579634635`
+- `max_drawdown_pct=0.0274036611864884404285714272`
 
-Подтверждённый stabilization batch закрыт:
-- `schema_version` добавлен в `BalanceCacheStore` и `OrderStore`
-- M15 gap / dropped bucket path в `mctp/strategy/mtf.py` теперь пишет warning
-- `Timeframe.MONTHLY` добавлен на enum/constants уровне
-- `float(T_CANCEL)` убран без изменения семантики
-- EMA использует явный SMA seed
-- CCI scaling constant вынесен в `mctp/core/constants.py`
+### Safety Range
+For `2024-07_to_2025-03` on the current code state:
+- `execution_count=0`
+- `trade_count=0`
+- `end_equity=10000.00000000`
+- `realized_pnl_total=0`
 
-## Текущий фокус
-Accepted working baseline зафиксирован на `v2.0-step2-fix` с завершённым `v2.0 backtest wiring`. Новый feature corridor после freeze ещё не зафиксирован.
+## Architectural Invariants
+- only `Decimal` for financial logic
+- only UTC-aware timestamps
+- `Symbol` remains typed
+- strategy layer remains read-only
+- exchange-specific logic stays inside adapter/runtime boundary
+- paper mode and testnet mode stay separated
+- constants come from `mctp/core/constants.py`
 
-## Роли инструментов в работе
-- **Claude (чат)** — архитектурные решения, roadmap compliance, системный аудит, стратегические решения
-- **Claude Code** — реализация, file-level аудит, запуск тестов, работа с Git
-- **ChatGPT** — матрица контрактов 01-57 (только при наличии GitHub доступа)
-- **DeepSeek** — второе мнение по коду
-- **Gemini / Grok** — не использовать для строгого аудита (позитивное смещение)
-- **Cursor** — локальная работа с конкретными файлами
+## Current Analytical Conclusion
+- no clean shared cross-year bucket-level bad regime remains after the current guard family
+- `2024` residual weakness is still concentrated in `30%+ x 1.0-2.0% H4`
+- `2025` residual weakness is fragmented across smaller cells
+- the remaining shared weakness is feature-shaped rather than bucket-clean, especially higher `H1 RSI`
+- the current mainline guard chain is likely close to its reasonable limit
 
-## Матрица контрактов (статус на v2.0-step2-fix)
-Контракты 44-53 — плановые заглушки согласно roadmap (не баги):
-- 44: критерии фьючерсов — оценивается при v2.2
-- 45-53: мультипары, ML, on-chain, anomaly, research — фазы v2.3-v5.0
-- 54: адаптивный риск — реализован частично (уровни 1,3,5.1,5.2,6,7,9), остальное фазируется
-- 07: 7 TF — `MONTHLY` теперь добавлен на enum/constants уровне; широкий downstream scope не расширялся
-
-## Что явно вне текущего scope
+## Out of Scope
 - production live trading readiness
 - multi-pair
 - futures
-- regime / anomaly / on-chain / ML
-- allocation engine
+- ML / anomaly / on-chain / allocation scope
 
-## Сохранённые версии
-- `v1.7-final` — чистая база до v2.0 (zip сохранён отдельно)
-- `v2.0-step1` — v1.7 + стратегия + MTF агрегатор (458 тестов зелёные)
-- `v2.0-step2` — testnet wiring (478 тестов зелёные)
-- `v2.0-step2-fix` — accepted baseline: audit fixes over step2 + completed `v2.0 backtest wiring` + closed stabilization tails + explicit supported/canonical timeframe split + narrow ATR enhancement in the first 4TF strategy + read-only `MONTHLY/W1` macro context layer over the same 4TF core (512 тестов зелёные)
+## Working Mode
+- `audit -> minimal patch -> tests -> audit -> context sync`
+- update `MCTP_context.md` and `AGENTS.md` after meaningful changes
+- commit only green tests

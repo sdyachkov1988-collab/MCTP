@@ -1,6 +1,8 @@
-# MCTP v1.7 Pre-Live Checklist
+# MCTP Current Baseline Pre-Live Checklist
 
 Mark each item explicitly as `done / not done / blocked`.
+
+This checklist is retained as a pre-live/testnet operator artifact for the current accepted baseline `v2.0-step2-fix`. It is not a live-production go-live checklist.
 
 - Scenario matrix completed and reviewed
 - Chaos / integration verification completed and reviewed

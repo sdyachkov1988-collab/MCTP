@@ -1,17 +1,17 @@
-# MCTP v1.7 Operator Runbook
+# MCTP Current Baseline Operator Runbook
 
 ## Purpose And Scope
 
-This runbook is for the current pre-live verification system only:
+This runbook is for the current accepted operational baseline:
 
 - deterministic backtest
 - paper runtime
 - Binance Spot TESTNET runtime
-- accepted startup/restart/protection/safety behavior through v1.7 verification
+- accepted startup/restart/protection/safety behavior through `v2.0-step2-fix`
 
 It is not a live-trading runbook. It does not assume any operator action that the repository cannot actually support today.
 
-This runbook remains a `v1.7`/testnet operator artifact even though the repository now also contains accepted local `v2.0` backtest wiring. It should not be read as a specification for live `v2.0` trading operations.
+The file name is legacy, but the document describes the current transitional baseline truth. It includes the accepted local `v2.0` backtest wiring boundary where relevant, while remaining a testnet/pre-live operator artifact rather than a live `v2.0` operations manual.
 
 ## Required Starting Conditions Before Runtime Start
 

@@ -1,30 +1,35 @@
-# MCTP — Modular Crypto Trading Platform
+# MCTP - Modular Crypto Trading Platform
 
-## Текущая подтверждённая стадия
-- подтверждённая стадия репозитория: `v2.0-step2-fix` (accepted baseline)
-- 512 тестов зелёные
-- текущий рабочий фокус: freeze/acceptance baseline зафиксирован; новый corridor ещё не зафиксирован
+## Current Historical Baseline
+- accepted historical baseline: `v2.0-step2-fix`
 
-## Подтверждённые стадии
-- `v0.0`-`v1.7` полностью
-- `v2.0-step1`: стратегия + MTF агрегатор + backtest/paper wiring
-- `v2.0-patch1`: три CRITICAL фикса — run_testnet_platform использует BtcUsdtMtfV20Strategy, _persist_snapshot() защищён, boundary leakage устранён, ExchangeOrderStatus/ListOrderStatus enums добавлены
-- `v2.0-step2`: testnet wiring — LiveMtfAggregator, MtfKlineManager, 4 независимых kline канала M15/H1/H4/D1, REST priming, startup gate
-- `v2.0-step2-fix`: 5 audit fixes поверх `v2.0-step2`; текущий tag/HEAD
-- принятый `v2.0 backtest wiring`: `--strategy` в `run_backtest_csv.py`, backward-compatible legacy default, согласованный protective OCO flow в `_run_v20_btcusdt_mtf`
+## Current Local Working State
+- local repo now includes accepted `v2.0 backtest wiring`
+- local repo includes backtest hot-path optimization for long CSV runs
+- local repo includes a narrow `v20_btcusdt_mtf` guard family shaped by post-baseline research
+- current full local test baseline: `533 passed, 9 warnings`
 
-## Архитектурные инварианты (нарушение недопустимо)
-- все финансовые значения — только `Decimal`
-- все временные метки — только UTC-aware `datetime`
-- `Symbol` — только типизированный объект, не plain string
-- весь async-код — через `asyncio`
-- константы — только из `mctp/core/constants.py`
-- strategy layer остаётся read-only
-- backtest использует только закрытые свечи
-- exchange-specific логика остаётся внутри adapter/runtime boundary
-- paper mode и testnet mode остаются разделёнными
+## Confirmed Stages
+- `v0.0`-`v1.7` complete
+- `v2.0-step1`: strategy + MTF aggregator + backtest/paper wiring
+- `v2.0-patch1`: critical fixes for `run_testnet_platform`, `_persist_snapshot()`, and boundary leakage
+- `v2.0-step2`: testnet wiring with `LiveMtfAggregator`, `MtfKlineManager`, four independent kline channels, REST priming, startup gate
+- `v2.0-step2-fix`: accepted historical baseline
+- local accepted `v2.0 backtest wiring`: OCO wiring in `_run_v20_btcusdt_mtf`, `--strategy` flag in `run_backtest_csv.py`
+- local post-baseline hardening: backtest hot-path optimization and narrow `v20_btcusdt_mtf` guard family
 
-## Что реально реализовано
+## Architectural Invariants
+- all financial values use `Decimal`
+- all timestamps are UTC-aware `datetime`
+- `Symbol` remains typed
+- async code goes through `asyncio`
+- constants come from `mctp/core/constants.py`
+- strategy layer remains read-only
+- backtest uses only closed candles
+- exchange-specific logic stays inside the adapter/runtime boundary
+- paper mode and testnet mode stay separated
+
+## What Is Actually Implemented
 - core domain models, risk/sizing, portfolio/accounting, order lifecycle, OCO/software-stop
 - deterministic backtest, analytics, CSV backtest input, trade export
 - paper runtime
@@ -32,39 +37,37 @@
 - startup sync / restart reconciliation through `v1.3`
 - observability through `v1.4`
 - alerting through `v1.5`
-- `v1.6` safety controls и последующий reliability hardening
+- `v1.6` safety controls and reliability hardening
 - `v1.7` scenario matrix, chaos/integration, operator artifacts, transition gate
-- `v2.0-step1` BtcUsdtMtfV20Strategy, MTF агрегатор, backtest/paper wiring
-- `v2.0-patch1` три CRITICAL фикса (boundary leakage, persist_snapshot, run_testnet_platform)
-- `v2.0-step2` testnet wiring (LiveMtfAggregator, MtfKlineManager, REST priming, startup gate)
-- timeframe foundation: supported TF layer отделён от canonical roadmap TF layer; current operational strategy/runtime остаётся 4TF (D1/H4/H1/M15)
-- первая 4TF стратегия использует M15 ATR как узкий volatility/risk layer; `MONTHLY/W1/M5/M30` не втянуты в active strategy logic
-- `MONTHLY/W1` теперь подаются в strategy input как read-only macro context layer поверх текущего 4TF core; active trading logic остаётся D1/H4/H1/M15, `M5` и `M30` не используются
+- `v2.0-step1` `BtcUsdtMtfV20Strategy`, MTF aggregator, backtest/paper wiring
+- `v2.0-step2` testnet MTF wiring
+- local `v2.0 backtest wiring`
+- local backtest hot-path optimization
+- local `v20_btcusdt_mtf` guard family:
+  - `D1 >= 30%` with `H4 < 0.5%`
+  - `D1 >= 30%` with `0.5% <= H4 < 1.0%`
+  - `D1 >= 30%` with `H4 >= 2.0%`
+  - `10% <= D1 < 20%` with `0.5% <= H4 < 1.0%`
+  - `10% <= D1 < 20%` with `1.0% <= H4 < 2.0%`
 
-## Известные проблемы которые нужно исправить (в порядке приоритета)
+## Current Next-Step Guidance
+- historical accepted baseline stays `v2.0-step2-fix`
+- no new universal feature corridor is locked yet
+- after the latest research, another shared cross-year bucket guard is not clearly justified
+- if more work is opened later, it should likely be either:
+  - deeper entry-logic audit
+  - 2024-specific experimental branch
+  - 2025-specific experimental branch
 
-Текущий подтверждённый stabilization batch закрыт:
-- `schema_version` добавлен в `BalanceCacheStore` и `OrderStore`
-- M15 gap / dropped bucket path в `mctp/strategy/mtf.py` теперь пишет warning
-- `Timeframe.MONTHLY` добавлен
-- `float(T_CANCEL)` убран
-- EMA использует явный SMA seed
-- CCI scaling constant вынесен в `mctp/core/constants.py`
+## Anti-Scope Rules
+- do not add multi-pair scope
+- do not add futures
+- do not add regime/anomaly/on-chain/ML
+- do not add allocation engine
+- do not rewrite architecture without direct need
+- do not change accepted `v1.7` operator artifacts without explicit instruction
 
-Новый feature corridor после freeze всё ещё не зафиксирован.
-
-## Следующая задача для агента
-Acceptance/freeze завершён для baseline `v2.0-step2-fix`. Следующий feature corridor ещё не зафиксирован.
-
-## Anti-scope правила
-- не добавлять multi-pair scope
-- не добавлять futures
-- не добавлять regime/anomaly/on-chain/ML
-- не добавлять allocation engine
-- не переписывать архитектуру без прямой необходимости
-- не трогать принятые v1.7 operator artifacts без явного указания
-
-## Рабочий процесс
+## Workflow
 - `audit -> minimal patch -> tests -> audit -> context sync`
-- после каждого изменения обновить MCTP_context.md и AGENTS.md
-- коммитить только зелёные тесты
+- after each meaningful change, update `MCTP_context.md` and `AGENTS.md`
+- commit only green tests

@@ -1,14 +1,14 @@
-# MCTP v1.7 to v2.0 Readiness Gate
+# MCTP Current Baseline Boundary Note
 
 ## Purpose
 
-This document closes the boundary between completed `v1.7` live-readiness verification and the later `v2.0` first-live implementation phase.
+This document defines the current accepted boundary of the repository at `v2.0-step2-fix`.
 
-It is a transition artifact only. It does not introduce live-trading behavior.
+It records what is already accepted in the codebase, what operational/runtime truth is currently supported, and what remains outside scope. It does not introduce live-trading behavior by itself.
 
-## What Is Accepted At The End Of v1.7
+## What Is Accepted In The Current Baseline
 
-The repository has completed the following accepted pre-live verification work:
+The repository has completed the following accepted verification and implementation work:
 
 - scenario matrix completed
 - chaos / integration verification completed
@@ -22,40 +22,48 @@ The repository has completed the following accepted pre-live verification work:
 - incident journal template present
 - operator intervention rules present
 - `BALANCE_CACHE_TTL` behavior verified against current runtime semantics
+- `BtcUsdtMtfV20Strategy` implemented
+- MTF aggregator and testnet wiring accepted through `v2.0-step2`
+- local `v2.0` backtest wiring accepted:
+  - `--strategy` in `run_backtest_csv.py`
+  - backward-compatible legacy default path
+  - protective/OCO handling in `_run_v20_btcusdt_mtf`
 
 ## What Remains Outside Current Scope
 
-The following remain outside the accepted repository scope described by this transition artifact:
+The following remain outside the accepted repository scope described by this baseline note:
 
-- `BtcUsdtMtfV20Strategy` and its testnet/backtest wiring exist in the repository, but this document does not accept or describe live `v2.0` trading behavior
 - no live production rollout yet
 - no multi-pair support
+- no futures support
 - no regime engine
 - no anomaly engine
+- no on-chain scope
+- no ML scope
 - no `v2.3+` allocation logic
 
-## Exact Entry Conditions For Starting v2.0 Implementation
+## Current Operational Truth
 
-The next implementation step may begin only under these assumptions:
+The current baseline truth is:
 
-- current runtime base is accepted for the pre-live/testnet verification scope
-- current operator artifacts are accepted and discoverable
-- the next coding work is limited to the first-live single-pair scope
-- `v2.0` remains limited to:
-  - one pair
-  - one strategy
-  - real-money mechanics only
+- current operational/runtime scope is deterministic backtest, paper runtime, and Binance Spot TESTNET runtime
+- accepted `v2.0` work is limited to the current single-pair BTCUSDT MTF strategy corridor already present in code
+- operator documents remain for testnet/pre-live operation; they are not a live-production playbook
+- the repository baseline is accepted as transitional, not final production maturity
 
-## Exact Non-Goals For The First v2.0 Implementation Step
+## Explicit Non-Goals For This Baseline
 
-The first `v2.0` step must not pull in:
+This baseline does not imply or accept:
 
-- `v2.1` stabilization work
+- a live-production deployment
+- broader `v2.x` feature expansion
 - `v2.3` multi-pair work
 - `v3.x` intelligence, anomaly, or regime-engine work
+- any change to the accepted paper/testnet separation
 
 ## Phase Boundary
 
-- `v1.7` live-readiness verification is complete
-- subsequent implementation phases begin in `v2.0`
-- this transition gate does not add live trading by itself
+- `v1.7` verification artifacts remain part of the baseline history
+- accepted repository state is now `v2.0-step2-fix`
+- local `v2.0` backtest wiring is part of the accepted baseline
+- this boundary note still does not imply live trading by itself

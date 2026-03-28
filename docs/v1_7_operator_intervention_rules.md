@@ -1,4 +1,6 @@
-# MCTP v1.7 Operator Intervention Rules
+# MCTP Current Baseline Operator Intervention Rules
+
+These rules apply to the current accepted baseline `v2.0-step2-fix` for paper/testnet operations. They do not imply live-production readiness.
 
 ## Stop Runtime Immediately
 

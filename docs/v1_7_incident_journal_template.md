@@ -1,6 +1,8 @@
-# MCTP v1.7 Incident Journal Template
+# MCTP Current Baseline Incident Journal Template
 
 Use UTC timestamps only.
+
+This template remains the operator incident record for the current accepted baseline `v2.0-step2-fix`.
 
 ## Incident Entry
 
