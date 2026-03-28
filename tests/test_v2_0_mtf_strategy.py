@@ -49,6 +49,8 @@ def _step_for_timeframe(timeframe: Timeframe) -> timedelta:
         return timedelta(hours=4)
     if timeframe == Timeframe.D1:
         return timedelta(days=1)
+    if timeframe == Timeframe.W1:
+        return timedelta(days=7)
     raise ValueError(f"Unsupported timeframe {timeframe.value}")
 
 
@@ -228,6 +230,64 @@ def _h1_overbought() -> list[Candle]:
     return _candle_sequence(Timeframe.H1, closes, start=START)
 
 
+def _bullish_w1() -> list[Candle]:
+    closes = [Decimal("40000"), Decimal("41000"), Decimal("42000"), Decimal("43000")]
+    return _candle_sequence(Timeframe.W1, closes, start=START)
+
+
+def _bearish_w1() -> list[Candle]:
+    closes = [Decimal("43000"), Decimal("42000"), Decimal("41000"), Decimal("40000")]
+    return _candle_sequence(Timeframe.W1, closes, start=START)
+
+
+def _bullish_monthly() -> list[Candle]:
+    candles: list[Candle] = []
+    month_starts = [
+        datetime(2025, 1, 1, tzinfo=timezone.utc),
+        datetime(2025, 2, 1, tzinfo=timezone.utc),
+        datetime(2025, 3, 1, tzinfo=timezone.utc),
+    ]
+    opens = [Decimal("38000"), Decimal("40000"), Decimal("42000")]
+    closes = [Decimal("40000"), Decimal("42000"), Decimal("44000")]
+    for timestamp, open_price, close_price in zip(month_starts, opens, closes, strict=True):
+        candles.append(
+            Candle(
+                timestamp=timestamp,
+                open=open_price,
+                high=close_price + Decimal("500"),
+                low=open_price - Decimal("500"),
+                close=close_price,
+                volume=Decimal("1"),
+                closed=True,
+            )
+        )
+    return candles
+
+
+def _bearish_monthly() -> list[Candle]:
+    candles: list[Candle] = []
+    month_starts = [
+        datetime(2025, 1, 1, tzinfo=timezone.utc),
+        datetime(2025, 2, 1, tzinfo=timezone.utc),
+        datetime(2025, 3, 1, tzinfo=timezone.utc),
+    ]
+    opens = [Decimal("44000"), Decimal("43000"), Decimal("42000")]
+    closes = [Decimal("43000"), Decimal("42000"), Decimal("41000")]
+    for timestamp, open_price, close_price in zip(month_starts, opens, closes, strict=True):
+        candles.append(
+            Candle(
+                timestamp=timestamp,
+                open=open_price,
+                high=open_price + Decimal("500"),
+                low=close_price - Decimal("500"),
+                close=close_price,
+                volume=Decimal("1"),
+                closed=True,
+            )
+        )
+    return candles
+
+
 def _instrument_info() -> dict[str, Decimal]:
     return {
         "lot_size": Decimal("0.001"),
@@ -370,6 +430,8 @@ def test_m15_to_higher_timeframes_is_utc_aligned_and_closed_only():
     assert len(candles[Timeframe.H1]) == 24
     assert len(candles[Timeframe.H4]) == 6
     assert len(candles[Timeframe.D1]) == 1
+    assert len(candles[Timeframe.W1]) == 0
+    assert len(candles[Timeframe.MONTHLY]) == 0
     assert candles[Timeframe.H1][0].timestamp == START
     assert candles[Timeframe.H4][1].timestamp == START + timedelta(hours=4)
     assert candles[Timeframe.D1][0].timestamp == START
@@ -426,6 +488,8 @@ def test_v20_strategy_bearish_daily_filter_returns_hold():
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _bearish_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
             },
             onchain=None,
         )
@@ -445,6 +509,8 @@ def test_v20_strategy_weak_trend_zone_near_ema200_returns_hold():
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _weak_trend_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
             },
             onchain=None,
         )
@@ -464,6 +530,8 @@ def test_v20_strategy_conflicting_h4_h1_m15_conditions_return_hold():
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _strong_bullish_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
             },
             onchain=None,
         )
@@ -483,6 +551,8 @@ def test_v20_strategy_fully_aligned_bullish_case_returns_buy():
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _strong_bullish_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
             },
             onchain=None,
         )
@@ -520,6 +590,8 @@ def test_v20_strategy_non_btcusdt_symbol_returns_hold():
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _strong_bullish_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
             },
             onchain=None,
         )
@@ -559,6 +631,48 @@ def test_v20_strategy_atr_layer_rejects_tiny_trigger_body_in_high_volatility():
                 Timeframe.H1: _h1_entry_ok(),
                 Timeframe.H4: _bullish_h4(),
                 Timeframe.D1: _strong_bullish_d1(),
+                Timeframe.W1: _bullish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.HOLD
+
+
+def test_v20_strategy_macro_context_required_returns_hold_when_missing():
+    m15 = _bullish_m15_trigger()
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _bullish_h4(),
+                Timeframe.D1: _strong_bullish_d1(),
+            },
+            onchain=None,
+        )
+    )
+    assert intent.type == IntentType.HOLD
+
+
+def test_v20_strategy_macro_context_can_block_lower_tf_bullish_setup():
+    m15 = _bullish_m15_trigger()
+    strategy = BtcUsdtMtfV20Strategy()
+    intent = strategy.on_candle(
+        StrategyInput(
+            snapshot=_snapshot(),
+            indicators=_strategy_indicators(m15),
+            candles={
+                Timeframe.M15: m15,
+                Timeframe.H1: _h1_entry_ok(),
+                Timeframe.H4: _bullish_h4(),
+                Timeframe.D1: _strong_bullish_d1(),
+                Timeframe.W1: _bearish_w1(),
+                Timeframe.MONTHLY: _bullish_monthly(),
             },
             onchain=None,
         )
@@ -606,6 +720,8 @@ def test_backtest_v20_strategy_passes_indicator_snapshot_with_atr(monkeypatch):
         Timeframe.H1,
         Timeframe.H4,
         Timeframe.D1,
+        Timeframe.W1,
+        Timeframe.MONTHLY,
     }
 
 
@@ -734,11 +850,15 @@ async def test_paper_runtime_builds_mtf_strategy_input_for_v20_strategy(tmp_path
         Timeframe.H1,
         Timeframe.H4,
         Timeframe.D1,
+        Timeframe.W1,
+        Timeframe.MONTHLY,
     }
     assert len(runtime.last_strategy_input.candles[Timeframe.M15]) == V20_MTF_REQUIRED_M15_CANDLES
     assert len(runtime.last_strategy_input.candles[Timeframe.H1]) == V20_MTF_REQUIRED_M15_CANDLES // 4
     assert len(runtime.last_strategy_input.candles[Timeframe.H4]) == V20_MTF_REQUIRED_M15_CANDLES // 16
     assert len(runtime.last_strategy_input.candles[Timeframe.D1]) == 200
+    assert len(runtime.last_strategy_input.candles[Timeframe.W1]) >= 2
+    assert len(runtime.last_strategy_input.candles[Timeframe.MONTHLY]) >= 2
     await runtime.shutdown()
 
 

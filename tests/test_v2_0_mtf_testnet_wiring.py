@@ -211,6 +211,8 @@ def test_mtf_aggregator_receives_candles_and_strategy_returns_intent():
     assert Timeframe.H1 in candle_map
     assert Timeframe.H4 in candle_map
     assert Timeframe.D1 in candle_map
+    assert Timeframe.W1 in candle_map
+    assert Timeframe.MONTHLY in candle_map
 
     # Strategy should return a valid Intent (HOLD since conditions won't align)
     strategy = BtcUsdtMtfV20Strategy()
@@ -488,9 +490,8 @@ def test_per_tf_staleness_evaluation():
 def test_aggregator_prime_derives_all_timeframes():
     """Priming from M15 history derives H1, H4, D1 candles."""
     agg = LiveMtfAggregator()
-    # Use a round count that produces complete H1/H4/D1 buckets
-    # 96 M15 = 1 D1, 16 M15 = 1 H4, 4 M15 = 1 H1
-    count = 96 * 3  # 3 full days = 288 M15 candles
+    # Use enough history to cross both weekly and monthly UTC bucket boundaries.
+    count = 96 * 70  # 70 full days of M15 candles
     candles = _m15_series(START, count)
     agg.prime_from_m15_history(candles)
 
@@ -499,6 +500,8 @@ def test_aggregator_prime_derives_all_timeframes():
     assert counts[Timeframe.H1] > 0  # 288/4 = 72 H1
     assert counts[Timeframe.H4] > 0  # 288/16 = 18 H4
     assert counts[Timeframe.D1] > 0  # 288/96 = 3 D1
+    assert counts[Timeframe.W1] > 0
+    assert counts[Timeframe.MONTHLY] > 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════

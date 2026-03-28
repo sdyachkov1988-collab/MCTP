@@ -2,7 +2,7 @@
 
 ## Текущая подтверждённая стадия
 - подтверждённая стадия репозитория: `v2.0-step2-fix` (accepted baseline)
-- 510 тестов зелёные
+- 512 тестов зелёные
 - текущий рабочий фокус: freeze/acceptance baseline зафиксирован; новый corridor ещё не зафиксирован
 
 ## Подтверждённые стадии
@@ -39,6 +39,7 @@
 - `v2.0-step2` testnet wiring (LiveMtfAggregator, MtfKlineManager, REST priming, startup gate)
 - timeframe foundation: supported TF layer отделён от canonical roadmap TF layer; current operational strategy/runtime остаётся 4TF (D1/H4/H1/M15)
 - первая 4TF стратегия использует M15 ATR как узкий volatility/risk layer; `MONTHLY/W1/M5/M30` не втянуты в active strategy logic
+- `MONTHLY/W1` теперь подаются в strategy input как read-only macro context layer поверх текущего 4TF core; active trading logic остаётся D1/H4/H1/M15, `M5` и `M30` не используются
 
 ## Известные проблемы которые нужно исправить (в порядке приоритета)
 

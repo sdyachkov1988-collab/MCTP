@@ -12,6 +12,7 @@ from mctp.core.constants import (
     V20_MTF_H1_RSI_PERIOD,
     V20_MTF_H4_EMA_FAST_PERIOD,
     V20_MTF_H4_EMA_SLOW_PERIOD,
+    V20_MTF_MACRO_CONTEXT_MIN_CANDLES,
     V20_MTF_M15_ATR_PERIOD,
     V20_MTF_M15_TRIGGER_MIN_BODY_ATR_RATIO,
     V20_MTF_SELL_REASON,
@@ -44,6 +45,8 @@ class BtcUsdtMtfV20Strategy(StrategyBase):
         h1 = input.candles.get(Timeframe.H1, [])
         h4 = input.candles.get(Timeframe.H4, [])
         d1 = input.candles.get(Timeframe.D1, [])
+        w1 = input.candles.get(Timeframe.W1, [])
+        monthly = input.candles.get(Timeframe.MONTHLY, [])
         if len(m15) < 2 or not h1 or not h4:
             return hold
 
@@ -66,6 +69,8 @@ class BtcUsdtMtfV20Strategy(StrategyBase):
 
         d1_ema = self._indicator_engine.ema(d1, V20_MTF_D1_EMA_PERIOD)
         if d1_ema is None or d1_ema <= Decimal("0"):
+            return hold
+        if not self._macro_context_allows_long(monthly, w1):
             return hold
         latest_d1 = d1[-1]
         if latest_d1.close <= d1_ema:
@@ -112,3 +117,21 @@ class BtcUsdtMtfV20Strategy(StrategyBase):
         if isinstance(snapshot, IndicatorSnapshot) and snapshot.atr is not None:
             return snapshot.atr
         return self._indicator_engine.atr(m15, V20_MTF_M15_ATR_PERIOD)
+
+    @staticmethod
+    def _macro_context_allows_long(monthly: list, weekly: list) -> bool:
+        if len(monthly) < V20_MTF_MACRO_CONTEXT_MIN_CANDLES or len(weekly) < V20_MTF_MACRO_CONTEXT_MIN_CANDLES:
+            return False
+        latest_monthly = monthly[-1]
+        previous_monthly = monthly[-2]
+        latest_weekly = weekly[-1]
+        previous_weekly = weekly[-2]
+        monthly_bullish = (
+            latest_monthly.close > latest_monthly.open
+            and latest_monthly.close >= previous_monthly.close
+        )
+        weekly_bullish = (
+            latest_weekly.close > latest_weekly.open
+            and latest_weekly.close >= previous_weekly.close
+        )
+        return monthly_bullish and weekly_bullish

@@ -5,7 +5,7 @@ MCTP — модульная spot-платформа для deterministic backtes
 
 ## Подтверждённая стадия
 - подтверждённая стадия: `v2.0-step2-fix` (accepted baseline)
-- 510 тестов — все зелёные (проверено локально)
+- 512 тестов — все зелёные (проверено локально)
 
 ## Что завершено
 - `v0.0`-`v0.12`: core, execution, risk, sizing, portfolio/accounting, storage, streams, backtest, analytics, indicators, strategy contract, paper runtime
@@ -25,6 +25,7 @@ MCTP — модульная spot-платформа для deterministic backtes
 - `v2.0 backtest wiring` (accepted baseline): `run_backtest_csv.py` поддерживает `--strategy`, default остаётся legacy path, v2.0 backtest path использует согласованный protective OCO lifecycle и direct SELL явно отменяет локальный protective OCO без противоречивого двойного exit state
 - timeframe foundation выровнен: supported TF layer отделён от canonical roadmap TF layer; current operational strategy/runtime остаётся 4TF (D1/H4/H1/M15)
 - первая 4TF стратегия улучшена через M15 ATR как volatility/risk layer: signal core остаётся D1/H4/H1/M15, ATR используется как entry execution sanity layer и согласован с уже существующим ATR-based sizing/protective context
+- `MONTHLY/W1` подключены в первую стратегию как read-only macro context layer: macro bias подаётся в strategy input через derived closed-candle maps, но trading core остаётся D1/H4/H1/M15; `M5` и `M30` не втягивались в active logic
 
 ## Архитектурные инварианты
 - только `Decimal` для финансовой логики
@@ -74,4 +75,4 @@ Accepted working baseline зафиксирован на `v2.0-step2-fix` с за
 - `v1.7-final` — чистая база до v2.0 (zip сохранён отдельно)
 - `v2.0-step1` — v1.7 + стратегия + MTF агрегатор (458 тестов зелёные)
 - `v2.0-step2` — testnet wiring (478 тестов зелёные)
-- `v2.0-step2-fix` — accepted baseline: audit fixes over step2 + completed `v2.0 backtest wiring` + closed stabilization tails + explicit supported/canonical timeframe split + narrow ATR enhancement in the first 4TF strategy (510 тестов зелёные)
+- `v2.0-step2-fix` — accepted baseline: audit fixes over step2 + completed `v2.0 backtest wiring` + closed stabilization tails + explicit supported/canonical timeframe split + narrow ATR enhancement in the first 4TF strategy + read-only `MONTHLY/W1` macro context layer over the same 4TF core (512 тестов зелёные)

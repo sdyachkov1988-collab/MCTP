@@ -205,6 +205,7 @@ V20_MTF_H1_RSI_ENTRY_MAX: Decimal = Decimal("70")
 V20_MTF_H1_RSI_EXIT_MIN: Decimal = Decimal("70")
 V20_MTF_M15_ATR_PERIOD: int = 14
 V20_MTF_M15_TRIGGER_MIN_BODY_ATR_RATIO: Decimal = Decimal("0.5")
+V20_MTF_MACRO_CONTEXT_MIN_CANDLES: int = 2
 # 200 days of M15 data required for EMA200 on D1.
 # Strategy returns HOLD until warmup is complete.
 # With REST priming at startup this is resolved automatically.

@@ -33,6 +33,8 @@ _MAX_M15_WINDOW = V20_MTF_REQUIRED_M15_CANDLES + 200  # small buffer
 _MAX_H1_WINDOW = V20_MTF_REQUIRED_M15_CANDLES // V20_MTF_M15_PER_H1 + 50
 _MAX_H4_WINDOW = V20_MTF_REQUIRED_M15_CANDLES // V20_MTF_M15_PER_H4 + 50
 _MAX_D1_WINDOW = V20_MTF_REQUIRED_M15_CANDLES // V20_MTF_M15_PER_D1 + 50
+_MAX_W1_WINDOW = V20_MTF_REQUIRED_M15_CANDLES // (V20_MTF_M15_PER_D1 * 7) + 12
+_MAX_MONTHLY_WINDOW = 24
 
 # Valid UTC boundaries for H4 candle starts
 _H4_VALID_HOURS = frozenset({0, 4, 8, 12, 16, 20})
@@ -55,6 +57,8 @@ class LiveMtfAggregator:
             Timeframe.H1: [],
             Timeframe.H4: [],
             Timeframe.D1: [],
+            Timeframe.W1: [],
+            Timeframe.MONTHLY: [],
         }
         self._last_m15_timestamp: Optional[datetime] = None
         self._warmup_complete = False
@@ -97,6 +101,8 @@ class LiveMtfAggregator:
         self._candles[Timeframe.H1] = mtf_map[Timeframe.H1][-_MAX_H1_WINDOW:]
         self._candles[Timeframe.H4] = mtf_map[Timeframe.H4][-_MAX_H4_WINDOW:]
         self._candles[Timeframe.D1] = mtf_map[Timeframe.D1][-_MAX_D1_WINDOW:]
+        self._candles[Timeframe.W1] = mtf_map[Timeframe.W1][-_MAX_W1_WINDOW:]
+        self._candles[Timeframe.MONTHLY] = mtf_map[Timeframe.MONTHLY][-_MAX_MONTHLY_WINDOW:]
 
         if self._candles[Timeframe.M15]:
             self._last_m15_timestamp = self._candles[Timeframe.M15][-1].timestamp
@@ -110,6 +116,8 @@ class LiveMtfAggregator:
                 "h1_derived": len(self._candles[Timeframe.H1]),
                 "h4_derived": len(self._candles[Timeframe.H4]),
                 "d1_derived": len(self._candles[Timeframe.D1]),
+                "w1_derived": len(self._candles[Timeframe.W1]),
+                "monthly_derived": len(self._candles[Timeframe.MONTHLY]),
                 "warmup_complete": self._warmup_complete,
             }),
         )
@@ -176,6 +184,7 @@ class LiveMtfAggregator:
                 )
         self._last_m15_timestamp = candle.timestamp
         self._append_candle(Timeframe.M15, candle)
+        self._refresh_macro_candles_from_m15()
 
     def _on_h4_candle(self, candle: Candle) -> None:
         """Handle H4 candle with UTC alignment validation."""
@@ -196,10 +205,17 @@ class LiveMtfAggregator:
             Timeframe.H1: _MAX_H1_WINDOW,
             Timeframe.H4: _MAX_H4_WINDOW,
             Timeframe.D1: _MAX_D1_WINDOW,
+            Timeframe.W1: _MAX_W1_WINDOW,
+            Timeframe.MONTHLY: _MAX_MONTHLY_WINDOW,
         }.get(timeframe, _MAX_M15_WINDOW)
         if len(window) > max_size:
             excess = len(window) - max_size
             del window[:excess]
+
+    def _refresh_macro_candles_from_m15(self) -> None:
+        m15 = self._candles.get(Timeframe.M15, [])
+        self._candles[Timeframe.W1] = aggregate_closed_m15_candles(m15, Timeframe.W1)[-_MAX_W1_WINDOW:]
+        self._candles[Timeframe.MONTHLY] = aggregate_closed_m15_candles(m15, Timeframe.MONTHLY)[-_MAX_MONTHLY_WINDOW:]
 
     def _check_warmup(self) -> None:
         m15_count = len(self._candles.get(Timeframe.M15, []))
