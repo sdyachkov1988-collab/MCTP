@@ -2,8 +2,8 @@
 
 ## Текущая подтверждённая стадия
 - подтверждённая стадия репозитория: `v2.0-step2-fix` (pending acceptance)
-- 484 теста зелёные
-- следующий рабочий коридор: v2.0 backtest wiring — OCO в `_run_v20_btcusdt_mtf`, `--strategy` флаг в `run_backtest_csv.py`
+- 491 тест зелёный
+- текущий рабочий фокус: acceptance/audit завершённого локально `v2.0 backtest wiring`; новый corridor ещё не зафиксирован
 
 ## Подтверждённые стадии
 - `v0.0`-`v1.7` полностью
@@ -11,6 +11,7 @@
 - `v2.0-patch1`: три CRITICAL фикса — run_testnet_platform использует BtcUsdtMtfV20Strategy, _persist_snapshot() защищён, boundary leakage устранён, ExchangeOrderStatus/ListOrderStatus enums добавлены
 - `v2.0-step2`: testnet wiring — LiveMtfAggregator, MtfKlineManager, 4 независимых kline канала M15/H1/H4/D1, REST priming, startup gate
 - `v2.0-step2-fix`: 5 audit fixes поверх `v2.0-step2`; текущий tag/HEAD
+- локально завершённый `v2.0 backtest wiring`: `--strategy` в `run_backtest_csv.py`, backward-compatible legacy default, согласованный protective OCO flow в `_run_v20_btcusdt_mtf`
 
 ## Архитектурные инварианты (нарушение недопустимо)
 - все финансовые значения — только `Decimal`
@@ -51,11 +52,7 @@
 11. `mctp/indicators/engine.py` — magic number для CCI не из constants.py
 
 ## Следующая задача для агента
-v2.0 backtest wiring:
-1. OCO wiring в `_run_v20_btcusdt_mtf` flow
-2. `--strategy` флаг в `run_backtest_csv.py`
-3. Прогнать полный тест-сьют
-4. Провести аудит изменений
+Acceptance/audit завершённого локально `v2.0 backtest wiring`. Следующий feature corridor после acceptance ещё не зафиксирован.
 
 ## Anti-scope правила
 - не добавлять multi-pair scope

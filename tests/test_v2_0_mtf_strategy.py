@@ -5,8 +5,8 @@ import pytest
 
 from mctp.backtest import BacktestCandle, BacktestConfig, BacktestEngine
 from mctp.core.constants import STRATEGY_ID_V20_BTCUSDT_MTF, V20_MTF_REQUIRED_M15_CANDLES
-from mctp.core.enums import IntentType, Market, Timeframe
-from mctp.core.types import PortfolioSnapshot, Symbol
+from mctp.core.enums import IntentType, Market, QuantityMode, Timeframe
+from mctp.core.types import Intent, PortfolioSnapshot, Symbol
 from mctp.indicators.models import Candle
 from mctp.runtime import KlineEvent
 from mctp.runtime.paper import PaperRuntime, PaperRuntimeConfig
@@ -221,6 +221,24 @@ def _long_backtest_history(count: int) -> list[BacktestCandle]:
     return candles
 
 
+def _flat_backtest_history(count: int, *, close: Decimal = Decimal("100")) -> list[BacktestCandle]:
+    candles: list[BacktestCandle] = []
+    for index in range(count):
+        timestamp = START + timedelta(minutes=15 * index)
+        candles.append(
+            BacktestCandle(
+                timestamp=timestamp,
+                open=close,
+                high=close + Decimal("1"),
+                low=close - Decimal("1"),
+                close=close,
+                volume=Decimal("1"),
+                bnb_rate=Decimal("300"),
+            )
+        )
+    return candles
+
+
 def _legacy_backtest_sequence() -> list[BacktestCandle]:
     closes = [
         Decimal("100"),
@@ -264,6 +282,25 @@ class RecordingBtcUsdtMtfStrategy(BtcUsdtMtfV20Strategy):
     def on_candle(self, input: StrategyInput):
         self.inputs.append(input)
         return super().on_candle(input)
+
+
+class ScriptedV20Strategy:
+    requires_mtf_warmup = True
+
+    def __init__(self, intents: list[IntentType]) -> None:
+        self._intents = intents
+        self._index = 0
+
+    def on_candle(self, input: StrategyInput):
+        intent_type = self._intents[min(self._index, len(self._intents) - 1)]
+        self._index += 1
+        return Intent(
+            type=intent_type,
+            symbol=input.snapshot.symbol,
+            quantity_mode=QuantityMode.FULL,
+            timestamp=input.snapshot.timestamp,
+            reason=f"scripted_{intent_type.value.lower()}",
+        )
 
 
 def test_m15_to_higher_timeframes_is_utc_aligned_and_closed_only():
@@ -452,6 +489,51 @@ def test_backtest_v20_strategy_runs_without_breaking_legacy_default():
     assert v20_result.trade_count == 0
 
 
+def test_backtest_v20_strategy_uses_protective_oco_for_take_profit(monkeypatch):
+    monkeypatch.setattr(
+        "mctp.backtest.engine.BtcUsdtMtfV20Strategy",
+        lambda indicator_engine: ScriptedV20Strategy([IntentType.BUY, IntentType.HOLD, IntentType.HOLD]),
+    )
+    result = BacktestEngine(
+        BacktestConfig(
+            symbol=BTCUSDT,
+            initial_quote=Decimal("10000"),
+            warmup_bars=5,
+            ema_period=3,
+            atr_period=3,
+            instrument_info=_instrument_info(),
+            strategy_id=STRATEGY_ID_V20_BTCUSDT_MTF,
+        )
+    ).run(_v20_protective_tp_sequence())
+    assert [execution.reason for execution in result.executions] == ["STRATEGY_ENTRY", "OCO_TP"]
+    assert result.trade_count == 1
+    assert len(result.closed_trades) == 1
+    assert result.closed_trades[0].exit_reason == "OCO_TP"
+
+
+def test_backtest_v20_direct_sell_cancels_protective_exit_consistently(monkeypatch):
+    monkeypatch.setattr(
+        "mctp.backtest.engine.BtcUsdtMtfV20Strategy",
+        lambda indicator_engine: ScriptedV20Strategy([IntentType.BUY, IntentType.SELL, IntentType.HOLD]),
+    )
+    result = BacktestEngine(
+        BacktestConfig(
+            symbol=BTCUSDT,
+            initial_quote=Decimal("10000"),
+            warmup_bars=5,
+            ema_period=3,
+            atr_period=3,
+            instrument_info=_instrument_info(),
+            strategy_id=STRATEGY_ID_V20_BTCUSDT_MTF,
+        )
+    ).run(_v20_direct_sell_sequence())
+    assert [execution.reason for execution in result.executions] == ["STRATEGY_ENTRY", "STRATEGY_EXIT"]
+    assert result.trade_count == 1
+    assert len(result.closed_trades) == 1
+    assert result.closed_trades[0].exit_reason == "STRATEGY_EXIT"
+    assert result.closed_trades[0].quantity > Decimal("0")
+
+
 @pytest.mark.asyncio
 async def test_paper_runtime_builds_mtf_strategy_input_for_v20_strategy(tmp_path):
     strategy = RecordingBtcUsdtMtfStrategy()
@@ -509,3 +591,51 @@ async def test_paper_runtime_builds_mtf_strategy_input_for_v20_strategy(tmp_path
     assert len(runtime.last_strategy_input.candles[Timeframe.H4]) == V20_MTF_REQUIRED_M15_CANDLES // 16
     assert len(runtime.last_strategy_input.candles[Timeframe.D1]) == 200
     await runtime.shutdown()
+
+
+def _v20_protective_tp_sequence() -> list[BacktestCandle]:
+    candles = _flat_backtest_history(V20_MTF_REQUIRED_M15_CANDLES + 2)
+    entry_index = V20_MTF_REQUIRED_M15_CANDLES
+    candles[entry_index] = BacktestCandle(
+        timestamp=START + timedelta(minutes=15 * entry_index),
+        open=Decimal("100"),
+        high=Decimal("101"),
+        low=Decimal("99"),
+        close=Decimal("100"),
+        volume=Decimal("1"),
+        bnb_rate=Decimal("300"),
+    )
+    candles[entry_index + 1] = BacktestCandle(
+        timestamp=START + timedelta(minutes=15 * (entry_index + 1)),
+        open=Decimal("100"),
+        high=Decimal("110"),
+        low=Decimal("100"),
+        close=Decimal("103"),
+        volume=Decimal("1"),
+        bnb_rate=Decimal("300"),
+    )
+    return candles
+
+
+def _v20_direct_sell_sequence() -> list[BacktestCandle]:
+    candles = _flat_backtest_history(V20_MTF_REQUIRED_M15_CANDLES + 2)
+    entry_index = V20_MTF_REQUIRED_M15_CANDLES
+    candles[entry_index] = BacktestCandle(
+        timestamp=START + timedelta(minutes=15 * entry_index),
+        open=Decimal("100"),
+        high=Decimal("101"),
+        low=Decimal("99"),
+        close=Decimal("100"),
+        volume=Decimal("1"),
+        bnb_rate=Decimal("300"),
+    )
+    candles[entry_index + 1] = BacktestCandle(
+        timestamp=START + timedelta(minutes=15 * (entry_index + 1)),
+        open=Decimal("100"),
+        high=Decimal("101"),
+        low=Decimal("100.25"),
+        close=Decimal("100"),
+        volume=Decimal("1"),
+        bnb_rate=Decimal("300"),
+    )
+    return candles

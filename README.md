@@ -63,7 +63,7 @@ python -m pytest tests/ -v
 python -m pytest tests/ -q
 ```
 
-Current local baseline: `484 passed`.
+Current local baseline: `491 passed`.
 
 ## Скрипты
 Deterministic demo backtest:
@@ -76,6 +76,12 @@ CSV backtest:
 
 ```bash
 python run_backtest_csv.py --csv data/market/spot/BTCUSDT-1m-2025-01.csv --symbol BTCUSDT
+```
+
+CSV backtest with explicit v2.0 MTF strategy:
+
+```bash
+python run_backtest_csv.py --csv data/market/spot/BTCUSDT-1m-2025-01.csv --symbol BTCUSDT --strategy v20_btcusdt_mtf
 ```
 
 Local paper runtime demo:

@@ -5,7 +5,7 @@ MCTP — модульная spot-платформа для deterministic backtes
 
 ## Подтверждённая стадия
 - подтверждённая стадия: `v2.0-step2-fix` (pending acceptance)
-- 484 теста — все зелёные (проверено локально)
+- 491 тест — все зелёные (проверено локально)
 
 ## Что завершено
 - `v0.0`-`v0.12`: core, execution, risk, sizing, portfolio/accounting, storage, streams, backtest, analytics, indicators, strategy contract, paper runtime
@@ -22,6 +22,7 @@ MCTP — модульная spot-платформа для deterministic backtes
 - `v2.0-patch1`: три CRITICAL фикса — `run_testnet_platform.py` использует `BtcUsdtMtfV20Strategy`, `_persist_snapshot()` защищён try/catch + alert, boundary leakage устранён (`ExchangeOrderStatus`/`ListOrderStatus`/`ListStatusType`/`ContingencyType` enums добавлены)
 - `v2.0-step2`: testnet wiring — `LiveMtfAggregator`, `MtfKlineManager`, 4 независимых kline канала M15/H1/H4/D1, REST priming, startup gate блокирует READY до warmup, M15 gap detection, per-TF staleness, 15 integration тестов
 - `v2.0-step2-fix`: 5 audit fixes поверх `v2.0-step2`; текущий `HEAD`/tag репозитория
+- `v2.0 backtest wiring` (локально завершён, pending acceptance): `run_backtest_csv.py` поддерживает `--strategy`, default остаётся legacy path, v2.0 backtest path использует согласованный protective OCO lifecycle и direct SELL явно отменяет локальный protective OCO без противоречивого двойного exit state
 
 ## Архитектурные инварианты
 - только `Decimal` для финансовой логики
@@ -45,13 +46,8 @@ MCTP — модульная spot-платформа для deterministic backtes
 10. **`mctp/execution/paper.py:123,192`** — `float(T_CANCEL)` для `asyncio.wait_for()`. Не финансовое значение, но отклонение от дисциплины.
 11. **`mctp/indicators/engine.py`** — magic number `Decimal("0.015")` для CCI вместо константы.
 
-## Следующий шаг — v2.0 backtest wiring
-Цель: подключить `BtcUsdtMtfV20Strategy` к backtest.
-Порядок работы:
-1. OCO wiring в `_run_v20_btcusdt_mtf` flow
-2. `--strategy` флаг в `run_backtest_csv.py`
-3. Прогнать полный тест-сьют
-4. Провести аудит после изменений
+## Текущий фокус
+`v2.0 backtest wiring` локально завершён и ждёт acceptance/audit. Новый рабочий corridor после acceptance ещё не зафиксирован.
 
 ## Роли инструментов в работе
 - **Claude (чат)** — архитектурные решения, roadmap compliance, системный аудит, стратегические решения
@@ -79,4 +75,4 @@ MCTP — модульная spot-платформа для deterministic backtes
 - `v1.7-final` — чистая база до v2.0 (zip сохранён отдельно)
 - `v2.0-step1` — v1.7 + стратегия + MTF агрегатор (458 тестов зелёные)
 - `v2.0-step2` — testnet wiring (478 тестов зелёные)
-- `v2.0-step2-fix` — audit fixes over step2 (484 теста зелёные)
+- `v2.0-step2-fix` — audit fixes over step2 + completed local `v2.0 backtest wiring` (491 тест зелёный)

@@ -39,6 +39,14 @@ class OpenTrade:
     entry_fill: Fill
 
 
+@dataclass
+class ProtectiveExitState:
+    active_oco: Optional[OCOOrder]
+    open_trade: Optional[OpenTrade]
+    trade_count_delta: int
+    realized_pnl_delta: Decimal
+
+
 class BacktestEngine:
     def __init__(self, config: BacktestConfig) -> None:
         self._config = config
@@ -309,6 +317,7 @@ class BacktestEngine:
         executions: list[BacktestExecution] = []
         equity_curve: list[EquityCurvePoint] = []
         closed_trades: list[ClosedTrade] = []
+        active_oco: Optional[OCOOrder] = None
         open_trade: Optional[OpenTrade] = None
         pending_entry: Optional[PendingEntryOrder] = None
         realized_pnl_total = Decimal("0")
@@ -354,14 +363,42 @@ class BacktestEngine:
                         timestamp=candle.timestamp,
                     )
                     tracker.on_fill(fill)
+                    self._assert_non_negative_free_quote(tracker.snapshot)
                     executions.append(self._execution_from_fill(fill, "STRATEGY_ENTRY", quote.mid))
                     open_trade = OpenTrade(entry_fill=fill)
                     equity_curve.append(self._equity_point(candle.timestamp, tracker.snapshot, quote.bid, "FILL"))
+                    active_oco = self._make_oco(
+                        tracker.snapshot.held_qty,
+                        fill.fill_price,
+                        atr,
+                        candle.timestamp,
+                        order_counter,
+                    )
                     pending_entry = None
                     trade_counter += 1
                 elif candle.timestamp - pending_entry.submitted_at >= timedelta(seconds=self._config.cancel_after_seconds):
                     pending_entry = None
                     cancelled_order_count += 1
+
+            if active_oco is not None and not active_oco.is_terminal:
+                protective_exit = self._finalize_active_oco_exit(
+                    tracker=tracker,
+                    active_oco=active_oco,
+                    open_trade=open_trade,
+                    candle=candle,
+                    executions=executions,
+                    equity_curve=equity_curve,
+                    closed_trades=closed_trades,
+                    risk_controller=risk_controller,
+                    reference_price=quote.mid,
+                    mark_price=quote.bid,
+                )
+                active_oco = protective_exit.active_oco
+                open_trade = protective_exit.open_trade
+                trade_count += protective_exit.trade_count_delta
+                realized_pnl_total += protective_exit.realized_pnl_delta
+                if protective_exit.trade_count_delta > 0:
+                    continue
 
             strategy_input = StrategyInput(
                 snapshot=tracker.snapshot,
@@ -413,6 +450,13 @@ class BacktestEngine:
                                 executions.append(self._execution_from_fill(fill, "STRATEGY_ENTRY", quote.mid))
                                 open_trade = OpenTrade(entry_fill=fill)
                                 equity_curve.append(self._equity_point(candle.timestamp, tracker.snapshot, quote.bid, "FILL"))
+                                active_oco = self._make_oco(
+                                    tracker.snapshot.held_qty,
+                                    fill.fill_price,
+                                    atr,
+                                    candle.timestamp,
+                                    order_counter,
+                                )
                                 continue
                             limit_price = quote.bid * (Decimal("1") - self._config.entry_limit_discount_pct)
                             pending_entry = PendingEntryOrder(
@@ -430,43 +474,35 @@ class BacktestEngine:
                             )
 
             if intent.type == IntentType.SELL and tracker.snapshot.is_in_position and tracker.snapshot.held_qty > Decimal("0"):
+                if active_oco is not None and not active_oco.is_terminal:
+                    active_oco.status = OCOStatus.CANCELLED
+                    active_oco.updated_at = candle.timestamp
                 trade_counter += 1
-                fill = self._make_fill(
-                    order_id=f"bt-order-exit-{trade_counter}",
-                    trade_id=f"bt-trade-exit-{trade_counter}",
-                    side=Side.SELL,
-                    quantity=tracker.snapshot.held_qty,
-                    fill_price=quote.bid,
-                    timestamp=candle.timestamp,
+                open_trade, realized_delta = self._close_open_trade_with_fill(
+                    tracker=tracker,
+                    open_trade=open_trade,
+                    fill=self._make_fill(
+                        order_id=f"bt-order-exit-{trade_counter}",
+                        trade_id=f"bt-trade-exit-{trade_counter}",
+                        side=Side.SELL,
+                        quantity=tracker.snapshot.held_qty,
+                        fill_price=quote.bid,
+                        timestamp=candle.timestamp,
+                    ),
+                    executions=executions,
+                    equity_curve=equity_curve,
+                    closed_trades=closed_trades,
+                    reference_price=quote.mid,
+                    mark_price=quote.bid,
+                    reason="STRATEGY_EXIT",
+                    exit_reason="STRATEGY_EXIT",
+                    close_trade_by_suffix=False,
                 )
-                pnl = tracker.realized_pnl(fill)
-                realized_pnl_total += pnl.net_pnl
-                tracker.on_fill(fill)
-                executions.append(self._execution_from_fill(fill, "STRATEGY_EXIT", quote.mid))
-                equity_curve.append(self._equity_point(candle.timestamp, tracker.snapshot, quote.bid, "FILL"))
-                if open_trade is not None:
-                    closed_trades.append(
-                        ClosedTrade(
-                            trade_id=open_trade.entry_fill.trade_id,
-                            entry_timestamp=open_trade.entry_fill.filled_at,
-                            exit_timestamp=fill.filled_at,
-                            quantity=fill.base_qty_filled,
-                            entry_price=open_trade.entry_fill.fill_price,
-                            exit_price=fill.fill_price,
-                            gross_pnl=pnl.gross_pnl,
-                            net_pnl=pnl.net_pnl,
-                            return_pct=(
-                                pnl.net_pnl / open_trade.entry_fill.quote_qty_filled
-                                if open_trade.entry_fill.quote_qty_filled > Decimal("0")
-                                else Decimal("0")
-                            ),
-                            exit_reason="STRATEGY_EXIT",
-                        )
-                    )
-                    open_trade = None
+                active_oco = None
+                realized_pnl_total += realized_delta
                 trade_count += 1
                 exit_equity = tracker.snapshot.free_quote + (tracker.snapshot.held_qty * quote.bid)
-                risk_controller.on_trade_result(pnl.net_pnl, exit_equity, now=candle.timestamp)
+                risk_controller.on_trade_result(realized_delta, exit_equity, now=candle.timestamp)
                 continue
 
             equity_curve.append(self._equity_point(candle.timestamp, tracker.snapshot, quote.bid, "HOLD"))
@@ -742,6 +778,9 @@ class BacktestEngine:
         exit_fill: Fill,
         gross_pnl: Decimal,
         net_pnl: Decimal,
+        *,
+        exit_reason: Optional[str] = None,
+        close_trade_by_suffix: bool = True,
     ) -> ClosedTrade:
         entry_notional = entry_fill.quote_qty_filled
         return ClosedTrade(
@@ -754,8 +793,94 @@ class BacktestEngine:
             gross_pnl=gross_pnl,
             net_pnl=net_pnl,
             return_pct=(net_pnl / entry_notional) if entry_notional > Decimal("0") else Decimal("0"),
-            exit_reason="OCO_TP" if exit_fill.trade_id.endswith("-tp") else "OCO_SL",
+            exit_reason=(
+                exit_reason
+                if exit_reason is not None
+                else ("OCO_TP" if close_trade_by_suffix and exit_fill.trade_id.endswith("-tp") else "OCO_SL")
+            ),
         )
+
+    def _finalize_active_oco_exit(
+        self,
+        *,
+        tracker: PortfolioTracker,
+        active_oco: OCOOrder,
+        open_trade: Optional[OpenTrade],
+        candle: BacktestCandle,
+        executions: list[BacktestExecution],
+        equity_curve: list[EquityCurvePoint],
+        closed_trades: list[ClosedTrade],
+        risk_controller: AdaptiveRiskController,
+        reference_price: Decimal,
+        mark_price: Decimal,
+    ) -> ProtectiveExitState:
+        updated_oco = self._process_oco(active_oco, candle, executions, reference_price)
+        if updated_oco is None or not updated_oco.is_terminal:
+            return ProtectiveExitState(
+                active_oco=updated_oco,
+                open_trade=open_trade,
+                trade_count_delta=0,
+                realized_pnl_delta=Decimal("0"),
+            )
+
+        exit_fill = updated_oco.all_fills[-1]
+        open_trade, realized_delta = self._close_open_trade_with_fill(
+            tracker=tracker,
+            open_trade=open_trade,
+            fill=exit_fill,
+            executions=executions,
+            equity_curve=equity_curve,
+            closed_trades=closed_trades,
+            reference_price=reference_price,
+            mark_price=mark_price,
+            reason=None,
+            exit_reason=None,
+            close_trade_by_suffix=True,
+        )
+        exit_equity = tracker.snapshot.free_quote + (tracker.snapshot.held_qty * mark_price)
+        risk_controller.on_trade_result(realized_delta, exit_equity, now=candle.timestamp)
+        return ProtectiveExitState(
+            active_oco=updated_oco,
+            open_trade=open_trade,
+            trade_count_delta=1,
+            realized_pnl_delta=realized_delta,
+        )
+
+    def _close_open_trade_with_fill(
+        self,
+        *,
+        tracker: PortfolioTracker,
+        open_trade: Optional[OpenTrade],
+        fill: Fill,
+        executions: list[BacktestExecution],
+        equity_curve: list[EquityCurvePoint],
+        closed_trades: Optional[list[ClosedTrade]],
+        reference_price: Decimal,
+        mark_price: Decimal,
+        reason: Optional[str],
+        exit_reason: Optional[str],
+        close_trade_by_suffix: bool,
+    ) -> tuple[Optional[OpenTrade], Decimal]:
+        pnl = tracker.realized_pnl(fill)
+        tracker.on_fill(fill)
+        if reason is not None:
+            executions.append(self._execution_from_fill(fill, reason, reference_price))
+        equity_curve.append(self._equity_point(fill.filled_at, tracker.snapshot, mark_price, "FILL"))
+        if open_trade is not None and closed_trades is not None:
+            closed_trades.append(
+                self._closed_trade_from_fills(
+                    open_trade.entry_fill,
+                    fill,
+                    pnl.gross_pnl,
+                    pnl.net_pnl,
+                    exit_reason=exit_reason,
+                    close_trade_by_suffix=close_trade_by_suffix,
+                )
+            )
+            open_trade = None
+        elif open_trade is not None:
+            open_trade = None
+        return open_trade, pnl.net_pnl
 
     def _cap_buy_quantity_to_affordable(
         self,

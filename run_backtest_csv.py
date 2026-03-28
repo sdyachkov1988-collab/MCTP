@@ -5,11 +5,18 @@ from pathlib import Path
 from mctp.backtest import BacktestConfig, BacktestEngine
 from mctp.backtest.csv_loader import load_binance_spot_kline_csv, parse_cli_datetime
 from mctp.backtest.trade_export import export_closed_trades_csv
+from mctp.core.constants import STRATEGY_ID_LEGACY_EMA_CROSS, STRATEGY_ID_V20_BTCUSDT_MTF
 from mctp.core.enums import Market
 from mctp.core.types import Symbol
 
 
-def parse_args() -> argparse.Namespace:
+SUPPORTED_STRATEGY_IDS = (
+    STRATEGY_ID_LEGACY_EMA_CROSS,
+    STRATEGY_ID_V20_BTCUSDT_MTF,
+)
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run MCTP backtest on a local Binance spot kline CSV file")
     parser.add_argument("--csv", required=True, help="Path to Binance spot kline CSV")
     parser.add_argument("--symbol", required=True, help="Symbol such as BTCUSDT")
@@ -18,8 +25,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--initial-quote", default="10000", help="Initial quote balance, default 10000")
     parser.add_argument("--warmup-bars", type=int, default=21, help="Warmup bars, default 21")
     parser.add_argument("--spread-bps", default="10", help="Bid/ask spread in bps, default 10")
+    parser.add_argument(
+        "--strategy",
+        default=STRATEGY_ID_LEGACY_EMA_CROSS,
+        choices=SUPPORTED_STRATEGY_IDS,
+        help=f"Strategy ID, default {STRATEGY_ID_LEGACY_EMA_CROSS}",
+    )
     parser.add_argument("--export-trades", help="Optional path to export completed trades as CSV")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def parse_symbol(raw_symbol: str) -> Symbol:
@@ -54,10 +67,12 @@ def main() -> None:
         atr_period=14,
         instrument_info=build_instrument_info(),
         spread_bps=Decimal(args.spread_bps),
+        strategy_id=args.strategy,
     )
     result = BacktestEngine(config).run(load_result.candles)
     print(f"csv_source={load_result.source}")
     print(f"symbol={symbol.base}{symbol.quote}")
+    print(f"strategy_id={config.strategy_id}")
     print(f"candles_loaded={len(load_result.candles)}")
     print(f"candles_used={len(load_result.candles)}")
     print(f"start_time={load_result.candles[0].timestamp.isoformat()}")
